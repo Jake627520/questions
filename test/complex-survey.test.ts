@@ -1,11 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { parseSurveyExcel } from "../src/lib/excel-parser";
 import { validateQuestionsStructure, evaluateSurveySubmission } from "../src/lib/survey-engine";
+import { generateComplexSurveyExcel } from "../scripts/generate-complex-demo-excel";
 import fs from "fs";
 import path from "path";
 
 describe("P0-5 25+ 題超大型示範題庫檢驗測試 (Complex Survey 26-Question Tests)", () => {
   const excelPath = path.resolve(process.cwd(), "demo-complex-survey.xlsx");
+
+  beforeAll(async () => {
+    if (!fs.existsSync(excelPath)) {
+      await generateComplexSurveyExcel(excelPath);
+    }
+  });
 
   it("應能完整解析 26 題並涵蓋所有題型與進階規則", async () => {
     expect(fs.existsSync(excelPath)).toBe(true);

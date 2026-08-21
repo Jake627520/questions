@@ -18,6 +18,7 @@
 *.pem
 *.xlsx
 !demo-survey.xlsx
+!demo-complex-survey.xlsx
 
 # debug & logs
 npm-debug.log*
