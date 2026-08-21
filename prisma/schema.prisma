@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SurveyStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum ResponseStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum QuestionType {
+  single_choice
+  multiple_choice
+  text
+  number
+  yes_no
+  info
+}
+
+model Survey {
+  id             String       @id @default(cuid())
+  parentSurveyId String?      @map("parent_survey_id")
+  version        Int          @default(1)
+  title          String
+  description    String?      @db.Text
+  status         SurveyStatus @default(DRAFT)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  parentSurvey   Survey?      @relation("SurveyVersions", fields: [parentSurveyId], references: [id], onDelete: SetNull)
+  childVersions  Survey[]     @relation("SurveyVersions")
+  questions      Question[]
+  responses      Response[]
+
+  @@map("surveys")
+}
+
+model Question {
+  id              String       @id @default(cuid())
+  surveyId        String       @map("survey_id")
+  orderNum        Int          @map("order_num")
+  code            String
+  title           String
+  description     String?      @db.Text
+  questionType    QuestionType @map("question_type")
+  required        Boolean      @default(false)
+  scoringEnabled  Boolean      @default(false) @map("scoring_enabled")
+  reverseScore    Boolean      @default(false) @map("reverse_score")
+  visibilityRules String?      @map("visibility_rules") @db.Text
+  visibilityHint  String?      @map("visibility_hint") @db.Text
+  minSelections   Int?         @map("min_selections")
+  maxSelections   Int?         @map("max_selections")
+  minValue        Float?       @map("min_value")
+  maxValue        Float?       @map("max_value")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  survey  Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  choices Choice[]
+  answers Answer[]
+
+  @@unique([surveyId, code])
+  @@index([surveyId, orderNum])
+  @@map("questions")
+}
+
+model Choice {
+  id            String   @id @default(cuid())
+  questionId    String   @map("question_id")
+  orderNum      Int      @map("order_num")
+  label         String
+  value         String
+  scoreEnabled  Boolean  @default(false) @map("score_enabled")
+  score         Float?
+  isOther       Boolean  @default(false) @map("is_other")
+  requiresText  Boolean  @default(false) @map("requires_text")
+  isNoneOfAbove Boolean  @default(false) @map("is_none_of_above")
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, orderNum])
+  @@map("choices")
+}
+
+model Response {
+  id          String         @id @default(cuid())
+  surveyId    String         @map("survey_id")
+  version     Int            @default(1)
+  status      ResponseStatus @default(COMPLETED)
+  totalScore  Float?         @map("total_score")
+  maxScore    Float?         @map("max_score")
+  percentage  Float?
+  submittedAt DateTime?      @map("submitted_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  survey  Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  answers Answer[]
+
+  @@index([surveyId])
+  @@map("responses")
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  responseId String   @map("response_id")
+  questionId String   @map("question_id")
+  rawValue   String   @map("raw_value") @db.Text
+  otherText  String?  @map("other_text") @db.Text
+  score      Float?
+
+  response Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([responseId])
+  @@index([questionId])
+  @@map("answers")
+}
