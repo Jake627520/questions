@@ -4,11 +4,58 @@
 
 ---
 
-## 🚀 快速作業流程 3 步驟
+## 🚀 快速作業流程
 
-1. **取得範本**：進入系統匯入頁面（`/surveys/import`），點選右上角「**下載示範範本 (demo-survey.xlsx)**」。
-2. **編輯題庫**：使用 Excel、Google Sheets 或 Numbers 開啟，依下方欄位規範填寫 `questions`（題目表）與 `choices`（選項表）兩個 Sheet。
-3. **上傳並發布**：將 `.xlsx` 檔案拖曳至匯入頁面，系統會自動執行預覽校驗，確認無誤後點選「**儲存並發布問卷**」即可開始填答。
+1. **取得範本**  
+   進入系統匯入頁面（`/surveys/import`），點選右上角「**下載示範範本 (demo-survey.xlsx)**」。
+
+2. **先閱讀頁面說明**  
+   展開頁面頂部的「**題庫製作注意事項**」，確認必要工作表、欄位與常見限制。
+
+3. **編輯題庫**  
+   使用 Excel、Google Sheets 或 Numbers 開啟，依下方欄位規範填寫 `questions`（題目表）與 `choices`（選項表）兩個工作表。
+
+4. **上傳並匯入**  
+   - 拖曳或選擇 `.xlsx` 檔案後，系統會**立即執行前端快速檢查**（副檔名、大小、必填、重複 code、選項關聯等）。  
+   - 可再點選「**解析題庫預覽**」執行後端完整解析。  
+   - 預設狀態為「**儲存為草稿 (DRAFT)**」；若選擇「**直接發布 (PUBLISHED)**」點選匯入時會出現二次確認視窗。  
+   - 確認無錯誤後點選確認匯入即可建立問卷。
+
+---
+
+## 🛡️ 系統會自動檢查什麼？
+
+### 上傳當下（前端即時預檢）
+- 副檔名必須為 `.xlsx`
+- 檔案大小限制（上限 5MB）
+- 是否包含 `questions` 工作表
+- 必要欄位是否大致存在（如 `code`、`title`、`question_type`）
+- `code` 是否空白或重複
+- `choices` 的 `question_code` 是否指向存在的題目
+
+### 後端完整檢查（預覽／匯入時）
+- 檔案內容是否為合法 Excel（OOXML Magic Bytes 簽章 `PK\x03\x04`，防止竄改副檔名偽裝）
+- 完整欄位與題型合法性校驗
+- 選項與題目關聯及代碼唯一性
+- 條件跳題（`visibility_rules`）語法與引用是否有效
+- 循環相依（Circular Dependency）等結構問題
+- **任一驗證錯誤均不會寫入資料庫（資料庫 Transaction 保護）**
+
+錯誤訊息會清楚標示工作表、列號與錯誤碼，並可在頁面篩選「**全部／錯誤／警告**」。
+
+---
+
+## ✏️ 特殊字元與填寫注意
+
+| 欄位 | 建議與規範 |
+|------|------|
+| `title`、`label`、`description` | 可使用中文、標點與特殊字元（如 `$ % ^ &`、括號、斜線等） |
+| `code`、`value` | 建議僅使用英數字與底線 `A-Z a-z 0-9 _`，避免特殊字元與空格 |
+| 空白列 | 系統會自動忽略純空白列 |
+| 有部分資料但缺必填 | 會主動報錯並提示列號，不會靜默略過 |
+| 故意填錯（重複 code、錯誤題型、無效關聯） | 前後端雙重攔截，不會匯入髒資料 |
+
+條件跳題請使用 `visibility_rules` 欄位（語法見下文），不要依賴不存在的自訂欄位。
 
 ---
 
@@ -69,6 +116,25 @@
 1. **循環相依（Circular Dependency）**：若 Q1 依賴 Q2、Q2 又依賴 Q1，系統會主動阻擋匯入。
 2. **無效選項名稱**：若寫了 `SHOW IF Q1 equals 根本沒有的選項`，系統會明確提示 `第 X 列 [題目代碼]：選項不存在`。
 3. **依賴未定義題目**：若依賴不存在的代碼（如 `SHOW IF Q99 equals ...`），會被系統攔截。
+
+---
+
+## 🔍 常見錯誤碼（節錄）
+
+| 錯誤碼 | 意義 |
+|--------|------|
+| `FILE_EXTENSION_INVALID` | 檔案副檔名不是 `.xlsx` |
+| `FILE_SIGNATURE_INVALID` | 檔案內容不是合法 Excel（可能被竄改副檔名偽裝） |
+| `FILE_TOO_LARGE` | 檔案超過大小上限（5MB） |
+| `SHEET_MISSING` | 缺少 `questions` 等必要工作表 |
+| `REQUIRED_FIELD_EMPTY` | 必填欄位空白（如 code, title, label 等） |
+| `DUPLICATE_QUESTION_CODE` | 題目 `code` 代碼重複 |
+| `INVALID_QUESTION_TYPE` | 題型不在 6 種允許清單內 |
+| `QUESTION_NOT_FOUND` | `choices` 選項指向不存在的題目代碼 |
+| `BRANCHING_CYCLE` | 題目跳題規則存在循環相依 |
+| `INVALID_VISIBILITY_RULE` | 跳題規則語法或引用的標籤錯誤 |
+
+更完整的技術規格與架構說明請參閱：[docs/EXCEL_IMPORT_PHASE_SUMMARY.md](docs/EXCEL_IMPORT_PHASE_SUMMARY.md)
 
 ---
 
