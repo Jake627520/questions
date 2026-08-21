@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileSpreadsheet,
@@ -40,6 +40,17 @@ export default function ImportSurveyPage() {
   const [clientValidation, setClientValidation] = useState<ClientValidationResult | null>(null);
   const [isClientValidating, setIsClientValidating] = useState(false);
   const [errorFilter, setErrorFilter] = useState<'all' | 'error' | 'warning'>('all');
+
+  // 取消連續快速選檔的非同步驗證
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // 合併前端 + 後端錯誤，方便統一顯示與篩選
   const allIssues: Array<ValidationIssue & { source: 'client' | 'server' }> = [
@@ -89,11 +100,23 @@ export default function ImportSurveyPage() {
       setPreviewErrors([]);
       setClientValidation(null);
 
+      // 取消上一次還在跑的驗證
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       setIsClientValidating(true);
       try {
         const result = await validateSurveyExcel(selectedFile);
+
+        if (controller.signal.aborted) return; // 已被新選擇取消
+
         setClientValidation(result);
       } catch (err: any) {
+        if (controller.signal.aborted) return;
+
         setClientValidation({
           isValid: false,
           errors: [
@@ -107,7 +130,9 @@ export default function ImportSurveyPage() {
           warnings: [],
         });
       } finally {
-        setIsClientValidating(false);
+        if (!controller.signal.aborted) {
+          setIsClientValidating(false);
+        }
       }
     }
   };
