@@ -22,7 +22,7 @@
 ---
 
 ## 目前已支援功能
-- **Excel 雙 Sheet 匯入 / 匯出**：標準 `questions` 與 `choices` 工作表解析與報表匯出
+- **Excel 雙 Sheet 匯入 / 匯出**：標準 `questions` 與 `choices` 工作表解析與報表匯出（詳見 [Excel 題庫製作 SOP](./EXCEL_IMPORT_SOP.md)）
 - **完整題型支援**：單選 (`single_choice`)、複選 (`multiple_choice`)、問答 (`text`)、數字 (`number`)、是非 (`yes_no`)、說明文字 (`info`)
 - **特殊選項機制**：
   - 「其他」（`is_other` + `requires_text`）：必須填寫補充文字
