@@ -16,7 +16,12 @@ import {
 } from "lucide-react";
 import { QuestionInput } from "@/lib/types";
 import { validateSurveyExcel } from "@/lib/validateSurveyExcel";
-import { ClientValidationResult } from "@/types/surveyImport";
+import {
+  ClientValidationResult,
+  ValidationIssue,
+  ValidationSeverity,
+  ValidationSheet,
+} from "@/types/surveyImport";
 
 export default function ImportSurveyPage() {
   const router = useRouter();
@@ -34,6 +39,47 @@ export default function ImportSurveyPage() {
 
   const [clientValidation, setClientValidation] = useState<ClientValidationResult | null>(null);
   const [isClientValidating, setIsClientValidating] = useState(false);
+  const [errorFilter, setErrorFilter] = useState<'all' | 'error' | 'warning'>('all');
+
+  // 合併前端 + 後端錯誤，方便統一顯示與篩選
+  const allIssues: Array<ValidationIssue & { source: 'client' | 'server' }> = [
+    ...(clientValidation?.errors || []).map((e) => ({ ...e, source: 'client' as const })),
+    ...(clientValidation?.warnings || []).map((e) => ({ ...e, source: 'client' as const })),
+    // 後端錯誤（相容字串或物件結構）
+    ...(previewErrors || []).map((msg) => {
+      if (typeof msg === 'object' && msg !== null) {
+        return {
+          code: String((msg as any).code || 'BACKEND_ERROR'),
+          severity: (((msg as any).severity === 'warning' ? 'warning' : 'error') as ValidationSeverity),
+          sheet: (['questions', 'choices', 'system'].includes((msg as any).sheet)
+            ? (msg as any).sheet
+            : 'system') as ValidationSheet,
+          row: (msg as any).row,
+          column: (msg as any).column,
+          field: (msg as any).field,
+          value: (msg as any).value,
+          message: (msg as any).message || String(msg),
+          source: 'server' as const,
+        };
+      }
+      return {
+        code: 'BACKEND_ERROR',
+        severity: 'error' as ValidationSeverity,
+        sheet: 'system' as ValidationSheet,
+        message: String(msg),
+        source: 'server' as const,
+      };
+    }),
+  ];
+
+  const filteredIssues = allIssues.filter((issue) => {
+    if (errorFilter === 'all') return true;
+    if (errorFilter === 'error') return issue.severity === 'error';
+    if (errorFilter === 'warning') return issue.severity === 'warning';
+    return true;
+  });
+
+  const displayIssues = filteredIssues.slice(0, 100);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -340,29 +386,89 @@ export default function ImportSurveyPage() {
                 {clientValidation.summary.choiceCount} 個選項
               </p>
             )}
+          </div>
+        )}
 
-            {clientValidation.errors.length > 0 && (
-              <ul className="list-disc pl-5 text-xs space-y-0.5 mt-1">
-                {clientValidation.errors.map((err, i) => (
-                  <li key={`client-err-${i}`}>
-                    [{err.sheet}]
-                    {err.row ? ` 第 ${err.row} 列` : ''}
-                    {' '}{err.message}
-                  </li>
-                ))}
-              </ul>
-            )}
+        {/* ===== 錯誤 / 警告 統一顯示與篩選區 ===== */}
+        {allIssues.length > 0 && !isClientValidating && (
+          <div className="p-4 rounded-xl border text-sm space-y-3 bg-slate-50 border-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-amber-600" />
+                <span>檢核問題清單（共 {allIssues.length} 筆）</span>
+              </div>
 
-            {clientValidation.warnings.length > 0 && (
-              <ul className="list-disc pl-5 text-xs space-y-0.5 mt-1 text-amber-700">
-                {clientValidation.warnings.map((warn, i) => (
-                  <li key={`client-warn-${i}`}>
-                    [警告] [{warn.sheet}]
-                    {warn.row ? ` 第 ${warn.row} 列` : ''}
-                    {' '}{warn.message}
+              {/* 篩選按鈕 */}
+              <div className="flex gap-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setErrorFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg border font-medium transition ${
+                    errorFilter === 'all'
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                  }`}
+                >
+                  全部 ({allIssues.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setErrorFilter('error')}
+                  className={`px-2.5 py-1 rounded-lg border font-medium transition ${
+                    errorFilter === 'error'
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                  }`}
+                >
+                  錯誤 ({allIssues.filter((i) => i.severity === 'error').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setErrorFilter('warning')}
+                  className={`px-2.5 py-1 rounded-lg border font-medium transition ${
+                    errorFilter === 'warning'
+                      ? 'bg-amber-500 text-white border-amber-500'
+                      : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                  }`}
+                >
+                  警告 ({allIssues.filter((i) => i.severity === 'warning').length})
+                </button>
+              </div>
+            </div>
+
+            <ul className="space-y-1.5 max-h-60 overflow-y-auto text-xs pr-1">
+              {displayIssues.length === 0 ? (
+                <li className="text-slate-500 py-2 text-center bg-white rounded-lg border border-slate-200">
+                  此篩選條件下沒有項目
+                </li>
+              ) : (
+                displayIssues.map((issue, i) => (
+                  <li
+                    key={`issue-${i}`}
+                    className={`px-3 py-2 rounded-lg border ${
+                      issue.severity === 'error'
+                        ? 'bg-red-50/80 border-red-200 text-red-800'
+                        : 'bg-amber-50/80 border-amber-200 text-amber-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <span className={issue.severity === 'error' ? 'text-red-700' : 'text-amber-700'}>
+                        [{issue.severity === 'error' ? '錯誤' : '警告'}]
+                      </span>
+                      <span className="opacity-75">[{issue.sheet}]</span>
+                      {issue.row ? <span>第 {issue.row} 列</span> : null}
+                      {issue.code ? <span className="font-mono text-[10px] opacity-60">· {issue.code}</span> : null}
+                    </div>
+                    <div className="mt-0.5 opacity-90">{issue.message}</div>
                   </li>
-                ))}
-              </ul>
+                ))
+              )}
+            </ul>
+
+            {filteredIssues.length > 100 && (
+              <p className="text-xs text-slate-500 text-center">
+                僅顯示前 100 筆，共有 {filteredIssues.length} 筆問題。
+              </p>
             )}
           </div>
         )}
@@ -392,21 +498,6 @@ export default function ImportSurveyPage() {
           </div>
         )}
       </div>
-
-      {/* Error Messages */}
-      {previewErrors.length > 0 && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm space-y-1">
-          <div className="font-bold flex items-center gap-1.5">
-            <AlertCircle className="w-4 h-4" />
-            <span>Excel 檢核錯誤：</span>
-          </div>
-          <ul className="list-disc pl-5 text-xs space-y-0.5">
-            {previewErrors.map((err, i) => (
-              <li key={i}>{err}</li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {/* Step 2: Preview Questions */}
       {previewData && previewData.length > 0 && (
