@@ -14,6 +14,13 @@
 
 ---
 
+## 🔒 本地優先與資料隱私（Local-First & Self-Hosted）
+- **100% 本地獨立運行**：本系統預設完全在使用者本機（`localhost`）運行，支援離線環境操作，不依賴任何外部雲端服務。
+- **資料隱私絕對安全**：所有問卷題目、填答者答案、草稿進度、計分結果及 Excel 報表均存儲於您本地的 PostgreSQL 資料庫中，資料絕不外流。
+- **區域網路（LAN / Wi-Fi）協同填答**：只需於啟動時加上 `-H 0.0.0.0` 參數，即可讓相同 Wi-Fi 網路內的手機、平板或同事電腦連線填答，所有資料依然直接匯整於您的本機電腦。
+
+---
+
 ## 目前已支援功能
 - **Excel 雙 Sheet 匯入 / 匯出**：標準 `questions` 與 `choices` 工作表解析與報表匯出
 - **完整題型支援**：單選 (`single_choice`)、複選 (`multiple_choice`)、問答 (`text`)、數字 (`number`)、是非 (`yes_no`)、說明文字 (`info`)
@@ -55,19 +62,21 @@
 
 ---
 
-## 快速開始
+## 快速開始（本地運行）
 
-### 1. 安裝相依套件
+### 1. 下載專案並安裝相依套件
 ```bash
+git clone https://github.com/Jake627520/questions.git
+cd questions
 npm install
 ```
 
 ### 2. 設定環境變數與資料庫
-複製環境變數範本並設定 PostgreSQL 連線字串：
+複製環境變數範本並設定本地 PostgreSQL 連線字串：
 ```bash
 cp .env.example .env
 ```
-在 `.env` 中設定您的連線資訊：
+在 `.env` 中確認本機連線資訊：
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/survey_db?schema=public"
 ```
@@ -77,14 +86,18 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/survey_db?schema=pub
 npx prisma db push
 ```
 
-### 3. 載入示範資料
+### 3. 載入示範資料（可選）
 ```bash
 npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/seed.ts
 ```
 
-### 4. 啟動開發伺服器
+### 4. 啟動本機伺服器
 ```bash
+# 僅本機電腦訪問
 npm run dev
+
+# 或是允許同 Wi-Fi / 區域網路內其他裝置（手機/同事電腦）訪問：
+npm run dev -- -H 0.0.0.0
 ```
 開啟瀏覽器訪問：`http://localhost:3000`
 
