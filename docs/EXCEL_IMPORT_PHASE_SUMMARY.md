@@ -42,11 +42,14 @@
 ### 安全
 - [x] OOXML Magic Bytes 檢查（`PK\x03\x04`）
 - [x] 對應錯誤碼 `FILE_SIGNATURE_INVALID`
+- [x] 後端檔案大小上限（5MB）
+- [x] questions / choices 列數上限（500 / 5000）
+- [x] 工作表數、單一儲存格長度上限（20 工作表 / 5000 字元）
 - [x] 相關單元測試
 
 ### 品質
 - [x] `npm run typecheck` / `lint` / `test` / `build` 全過
-- [x] 測試數由約 77 → 83（視最終 commit 為準）
+- [x] 測試數由約 77 → 84（全數 PASS）
 
 ---
 
@@ -62,7 +65,7 @@
 8. 確認匯入：
    - `DRAFT`：直接建立
    - `PUBLISHED`：二次確認後建立
-9. 後端再次檢查：Magic Bytes → 結構 → 商業規則 → Transaction 寫入
+9. 後端再次檢查：Magic Bytes → 檔案與列數上限 → 結構 → 商業規則 → Transaction 寫入
 
 原則：**前端只做 UX 預檢，後端才是安全與正確性邊界。**
 
@@ -73,9 +76,12 @@
 | 錯誤碼 | 說明 | 典型觸發 |
 |--------|------|----------|
 | `FILE_EXTENSION_INVALID` | 副檔名不支援 | 上傳非 `.xlsx` |
-| `FILE_TOO_LARGE` | 超過大小限制 | 檔案 > 5MB（前端） |
+| `FILE_TOO_LARGE` | 超過大小限制 | 檔案 > 5MB（前端/後端） |
 | `FILE_SIGNATURE_INVALID` | Magic Bytes 不符 | 改副檔名的假檔案 |
 | `FILE_PARSE_FAILED` | 解析失敗 | 損毀或非標準 XLSX |
+| `ROW_LIMIT_EXCEEDED` | 列數超過上限 | questions > 500 列或 choices > 5000 列 |
+| `SHEET_LIMIT_EXCEEDED` | 工作表數量過多 | 工作表 > 20 個 |
+| `CELL_TOO_LONG` | 單一儲存格文字過長 | 儲存格 > 5000 字元 |
 | `SHEET_MISSING` | 缺少必要工作表 | 無 `questions` |
 | `HEADER_MISSING_REQUIRED` | 缺少必要欄位 | 無 `code` / `title` 等 |
 | `REQUIRED_FIELD_EMPTY` | 必填為空 | code / title / label 等為空 |
@@ -97,12 +103,12 @@
 |------|------|
 | `src/types/surveyImport.ts` | 共用型別、錯誤碼、ImportResponse |
 | `src/lib/validateSurveyExcel.ts` | 前端輕量驗證 |
-| `src/lib/excel-parser.ts` | 後端解析 + Magic Bytes + issues |
-| `src/app/api/surveys/import/route.ts` | 匯入 API、標準回應、簽章攔截 |
+| `src/lib/excel-parser.ts` | 後端解析 + Magic Bytes + 資源上限 + issues |
+| `src/app/api/surveys/import/route.ts` | 匯入 API、標準回應、簽章與大小攔截 |
 | `src/app/surveys/import/page.tsx` | 匯入 UI、說明、篩選、確認、AbortController |
-| `EXCEL_IMPORT_SOP.md` | 使用者向欄位規格（可再同步更新） |
+| `EXCEL_IMPORT_SOP.md` | 使用者向欄位規格（已同步更新） |
 | `test/validate-survey-excel.test.ts` | 前端驗證測試 |
-| `test/excel-parser.test.ts` | 解析 + Magic Bytes 測試 |
+| `test/excel-parser.test.ts` | 解析 + Magic Bytes + 大小上限測試 |
 
 ---
 
@@ -119,9 +125,9 @@
 
 ## 7. 建議後續 Roadmap
 
-### 短期（可選）
-- [ ] 更新 `EXCEL_IMPORT_SOP.md`：補前端驗證、錯誤碼、Magic Bytes 說明
-- [ ] 後端統一檔案大小、列數、儲存格長度上限
+### 短期（已完成 / 進行中）
+- [x] 更新 `EXCEL_IMPORT_SOP.md`：補前端驗證、錯誤碼、Magic Bytes、後端上限說明
+- [x] 後端統一檔案大小、列數、儲存格長度上限
 - [ ] 大量錯誤時提供「下載錯誤報告」
 
 ### 中期

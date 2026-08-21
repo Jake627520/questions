@@ -35,6 +35,7 @@
 
 ### 後端完整檢查（預覽／匯入時）
 - 檔案內容是否為合法 Excel（OOXML Magic Bytes 簽章 `PK\x03\x04`，防止竄改副檔名偽裝）
+- 後端資源上限：檔案最大 5MB；`questions` 最多約 500 列；`choices` 最多約 5000 列；工作表最多約 20 個；單一儲存格約 5000 字元（超過會回傳 `FILE_TOO_LARGE` / `ROW_LIMIT_EXCEEDED` / `SHEET_LIMIT_EXCEEDED` / `CELL_TOO_LONG`）
 - 完整欄位與題型合法性校驗
 - 選項與題目關聯及代碼唯一性
 - 條件跳題（`visibility_rules`）語法與引用是否有效
@@ -126,6 +127,9 @@
 | `FILE_EXTENSION_INVALID` | 檔案副檔名不是 `.xlsx` |
 | `FILE_SIGNATURE_INVALID` | 檔案內容不是合法 Excel（可能被竄改副檔名偽裝） |
 | `FILE_TOO_LARGE` | 檔案超過大小上限（5MB） |
+| `ROW_LIMIT_EXCEEDED` | 列數超過上限（questions > 500 列或 choices > 5000 列） |
+| `SHEET_LIMIT_EXCEEDED` | 工作表數量過多（> 20 個） |
+| `CELL_TOO_LONG` | 單一儲存格文字過長（> 5000 字元） |
 | `SHEET_MISSING` | 缺少 `questions` 等必要工作表 |
 | `REQUIRED_FIELD_EMPTY` | 必填欄位空白（如 code, title, label 等） |
 | `DUPLICATE_QUESTION_CODE` | 題目 `code` 代碼重複 |
