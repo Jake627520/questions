@@ -25,7 +25,7 @@ export default function ImportSurveyPage() {
   const [description, setDescription] = useState(
     "感謝您撥冗填寫，本問卷旨在評估產品功能與體驗回饋。"
   );
-  const [status, setStatus] = useState<"PUBLISHED" | "DRAFT">("PUBLISHED");
+  const [status, setStatus] = useState<"PUBLISHED" | "DRAFT">("DRAFT");
 
   const [previewData, setPreviewData] = useState<QuestionInput[] | null>(null);
   const [previewErrors, setPreviewErrors] = useState<string[]>([]);
@@ -102,6 +102,24 @@ export default function ImportSurveyPage() {
 
   const handleSaveAndPublish = async () => {
     if (!file) return;
+
+    // ===== 新增：PUBLISHED 二次確認 =====
+    if (status === 'PUBLISHED') {
+      const questionCount = clientValidation?.summary?.questionCount ?? previewData?.length ?? '?';
+      const choiceCount = clientValidation?.summary?.choiceCount ?? '?';
+
+      const confirmed = window.confirm(
+        `您即將「直接發布」這份問卷！\n\n` +
+        `預計匯入：${questionCount} 題 / ${choiceCount} 個選項\n\n` +
+        `發布後填答者即可立即填寫。\n` +
+        `確定要繼續嗎？\n\n` +
+        `（建議測試時先選擇「儲存為草稿」）`
+      );
+
+      if (!confirmed) return;
+    }
+    // ===== 確認結束 =====
+
     try {
       setSaving(true);
       const formData = new FormData();
@@ -255,8 +273,8 @@ export default function ImportSurveyPage() {
               onChange={(e) => setStatus(e.target.value as any)}
               className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="PUBLISHED">直接發布 (PUBLISHED)</option>
               <option value="DRAFT">儲存為草稿 (DRAFT)</option>
+              <option value="PUBLISHED">直接發布 (PUBLISHED)</option>
             </select>
           </div>
 
