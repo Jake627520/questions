@@ -15,6 +15,8 @@ import {
   Eye,
 } from "lucide-react";
 import { QuestionInput } from "@/lib/types";
+import { validateSurveyExcel } from "@/lib/validateSurveyExcel";
+import { ClientValidationResult } from "@/types/surveyImport";
 
 export default function ImportSurveyPage() {
   const router = useRouter();
@@ -30,11 +32,37 @@ export default function ImportSurveyPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [clientValidation, setClientValidation] = useState<ClientValidationResult | null>(null);
+  const [isClientValidating, setIsClientValidating] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
       setPreviewData(null);
       setPreviewErrors([]);
+      setClientValidation(null);
+
+      setIsClientValidating(true);
+      try {
+        const result = await validateSurveyExcel(selectedFile);
+        setClientValidation(result);
+      } catch (err: any) {
+        setClientValidation({
+          isValid: false,
+          errors: [
+            {
+              code: "FILE_PARSE_FAILED",
+              severity: "error",
+              sheet: "system",
+              message: err?.message || "前端驗證過程發生錯誤",
+            },
+          ],
+          warnings: [],
+        });
+      } finally {
+        setIsClientValidating(false);
+      }
     }
   };
 
@@ -179,6 +207,62 @@ export default function ImportSurveyPage() {
           </div>
         </div>
 
+        {/* ===== 前端快速驗證結果 ===== */}
+        {isClientValidating && (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm">
+            🔍 正在進行前端快速檢查...
+          </div>
+        )}
+
+        {clientValidation && !isClientValidating && (
+          <div
+            className={`p-4 rounded-xl text-sm space-y-2 ${
+              clientValidation.isValid
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                : 'bg-red-50 border border-red-200 text-red-700'
+            }`}
+          >
+            <div className="font-bold flex items-center gap-1.5">
+              {clientValidation.isValid ? (
+                <span>✅ 前端驗證通過</span>
+              ) : (
+                <span>❌ 前端驗證未通過，請修正後再匯入</span>
+              )}
+            </div>
+
+            {clientValidation.summary && (
+              <p className="text-xs opacity-80">
+                預計匯入 {clientValidation.summary.questionCount} 題，
+                {clientValidation.summary.choiceCount} 個選項
+              </p>
+            )}
+
+            {clientValidation.errors.length > 0 && (
+              <ul className="list-disc pl-5 text-xs space-y-0.5 mt-1">
+                {clientValidation.errors.map((err, i) => (
+                  <li key={`client-err-${i}`}>
+                    [{err.sheet}]
+                    {err.row ? ` 第 ${err.row} 列` : ''}
+                    {' '}{err.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {clientValidation.warnings.length > 0 && (
+              <ul className="list-disc pl-5 text-xs space-y-0.5 mt-1 text-amber-700">
+                {clientValidation.warnings.map((warn, i) => (
+                  <li key={`client-warn-${i}`}>
+                    [警告] [{warn.sheet}]
+                    {warn.row ? ` 第 ${warn.row} 列` : ''}
+                    {' '}{warn.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {file && (
           <div className="flex justify-end gap-3 pt-2">
             <button
@@ -190,8 +274,13 @@ export default function ImportSurveyPage() {
             </button>
             <button
               onClick={handleSaveAndPublish}
-              disabled={saving}
-              className="inline-flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition"
+              disabled={
+                saving ||
+                !file ||
+                isClientValidating ||
+                (clientValidation !== null && !clientValidation.isValid)
+              }
+              className="inline-flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle className="w-4 h-4" />
               <span>{saving ? "儲存中..." : "確認匯入並建立問卷"}</span>
