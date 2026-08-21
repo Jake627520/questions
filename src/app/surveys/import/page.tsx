@@ -161,6 +161,79 @@ export default function ImportSurveyPage() {
         </a>
       </div>
 
+      {/* ===== 題庫製作注意事項（可收合） ===== */}
+      <details className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm group">
+        <summary className="font-semibold cursor-pointer text-slate-800 list-none flex items-center gap-2 select-none">
+          <span className="text-blue-600">📋</span>
+          <span>題庫製作注意事項（點擊展開 / 收合）</span>
+          <span className="ml-auto text-xs text-slate-400 group-open:hidden">點擊查看完整規則</span>
+          <span className="ml-auto text-xs text-slate-400 hidden group-open:inline">點擊收合</span>
+        </summary>
+
+        <div className="mt-4 space-y-4 text-slate-600 text-xs leading-relaxed border-t border-slate-200 pt-4">
+          {/* 1. 必要工作表 */}
+          <div>
+            <p className="font-semibold text-slate-800 mb-1">1. 必要工作表</p>
+            <ul className="list-disc pl-5 space-y-0.5">
+              <li><code className="bg-slate-200 px-1 rounded">questions</code>（題目）— <strong>必須有</strong></li>
+              <li><code className="bg-slate-200 px-1 rounded">choices</code>（選項）— 建議有（選擇題需要）</li>
+            </ul>
+          </div>
+
+          {/* 2. questions 必要欄位 */}
+          <div>
+            <p className="font-semibold text-slate-800 mb-1">2. questions 工作表必要欄位</p>
+            <ul className="list-disc pl-5 space-y-0.5">
+              <li><code className="bg-slate-200 px-1 rounded">code</code>：題目唯一代碼（不可重複、不可空白）</li>
+              <li><code className="bg-slate-200 px-1 rounded">title</code>：題目標題（不可空白）</li>
+              <li>
+                <code className="bg-slate-200 px-1 rounded">question_type</code>：只能填以下其中一種
+                <div className="mt-1 flex flex-wrap gap-1">
+                  <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px]">single_choice</span>
+                  <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px]">multiple_choice</span>
+                  <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px]">text</span>
+                  <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px]">number</span>
+                  <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px]">yes_no</span>
+                  <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px]">info</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          {/* 3. choices 必要欄位 */}
+          <div>
+            <p className="font-semibold text-slate-800 mb-1">3. choices 工作表必要欄位</p>
+            <ul className="list-disc pl-5 space-y-0.5">
+              <li><code className="bg-slate-200 px-1 rounded">question_code</code>：必須對應到 questions 的 code</li>
+              <li><code className="bg-slate-200 px-1 rounded">label</code>：選項顯示文字（不可空白）</li>
+              <li><code className="bg-slate-200 px-1 rounded">value</code>：選項代碼（同一題內不可重複）</li>
+            </ul>
+          </div>
+
+          {/* 4. 特殊字元與填寫規則 */}
+          <div>
+            <p className="font-semibold text-slate-800 mb-1">4. 特殊字元與填寫規則</p>
+            <ul className="list-disc pl-5 space-y-0.5">
+              <li><strong>title、label、description</strong>：可使用特殊字元（$ % ^ & 中文 標點都可以）</li>
+              <li><strong>code、value</strong>：建議只用英數字與底線（A-Z a-z 0-9 _），避免特殊字元</li>
+              <li>空白列會被自動忽略</li>
+              <li>有部分資料但缺少必填欄位 → <span className="text-red-600 font-medium">會報錯</span></li>
+              <li>code 重複、題型錯誤、選項指到不存在的題目 → <span className="text-red-600 font-medium">會報錯</span></li>
+              <li>故意填錯資料會被前端 + 後端雙重攔截，不會寫入資料庫</li>
+            </ul>
+          </div>
+
+          {/* 5. 建議作法 */}
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-blue-800">
+            <p className="font-semibold mb-1">建議作法</p>
+            <p>
+              請先點右上角「下載示範範本 (demo-survey.xlsx)」，依照範例修改後再上傳。
+              完整欄位說明可參考專案的 <code className="bg-blue-100 px-1 rounded">EXCEL_IMPORT_SOP.md</code>。
+            </p>
+          </div>
+        </div>
+      </details>
+
       {/* Step 1: Upload and Configure */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
