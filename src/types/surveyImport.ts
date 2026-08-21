@@ -27,6 +27,9 @@ export type ValidationErrorCode =
   | 'FILE_TOO_LARGE'
   | 'FILE_MIME_INVALID'
   | 'FILE_PARSE_FAILED'
+  | 'ROW_LIMIT_EXCEEDED'          // 列數超過上限
+  | 'SHEET_LIMIT_EXCEEDED'        // 工作表數量超過上限
+  | 'CELL_TOO_LONG'               // 儲存格文字過長
   // 工作表 / 結構
   | 'SHEET_MISSING'
   | 'HEADER_INVALID'

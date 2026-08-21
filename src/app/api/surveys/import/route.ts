@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSurveyExcel, hasValidXlsxSignature } from "@/lib/excel-parser";
+import { parseSurveyExcel, hasValidXlsxSignature, MAX_FILE_SIZE } from "@/lib/excel-parser";
 import { validateQuestionsStructure } from "@/lib/survey-engine";
 import { db } from "@/lib/db";
 import { QuestionType, SurveyStatus } from "@prisma/client";
@@ -31,6 +31,26 @@ export async function POST(req: NextRequest) {
           warnings: [],
         } satisfies ImportResponse,
         { status: 400 }
+      );
+    }
+
+    // ===== 檔案大小上限檢查 (5MB) =====
+    if (file.size > MAX_FILE_SIZE) {
+      const issue: ValidationIssue = {
+        code: "FILE_TOO_LARGE",
+        severity: "error",
+        sheet: "system",
+        message: `檔案大小不可超過 ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+      };
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: issue.message,
+          errors: [issue],
+          warnings: [],
+        } satisfies ImportResponse,
+        { status: 413 }
       );
     }
 

@@ -25,6 +25,18 @@ describe("Excel 題庫匯入與報表匯出測試 (Excel Parser & Exporter Tests
     expect(hasValidXlsxSignature(tooShort)).toBe(false);
   });
 
+  it("應能拒絕超過 5MB 大小限制的 buffer (FILE_TOO_LARGE)", async () => {
+    const bigBuffer = Buffer.alloc(6 * 1024 * 1024, 1);
+    bigBuffer[0] = 0x50;
+    bigBuffer[1] = 0x4b;
+    bigBuffer[2] = 0x03;
+    bigBuffer[3] = 0x04;
+
+    const result = await parseSurveyExcel(bigBuffer);
+    expect(result.issues.some((i) => i.code === "FILE_TOO_LARGE")).toBe(true);
+    expect(result.questions).toHaveLength(0);
+  });
+
   it("應能成功產生包含 11 題 (含條件跳題) 之 Demo Excel 檔案", async () => {
     await generateDemoExcel(testExcelPath);
     expect(fs.existsSync(testExcelPath)).toBe(true);

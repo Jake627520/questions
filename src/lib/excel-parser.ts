@@ -31,6 +31,12 @@ function getCellValue(cell: ExcelJS.Cell): any {
   return val;
 }
 
+export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+export const MAX_QUESTION_ROWS = 500;         // 含標頭
+export const MAX_CHOICE_ROWS = 5000;          // 含標頭
+export const MAX_SHEETS = 20;
+export const MAX_CELL_LENGTH = 5000;
+
 /**
  * 檢查是否為合法的 XLSX（OOXML）檔案
  * XLSX 本質是 ZIP 容器，開頭 magic bytes 必須是 PK\x03\x04 (0x50, 0x4B, 0x03, 0x04)
@@ -84,6 +90,20 @@ export async function parseSurveyExcel(
 ): Promise<{ questions: QuestionInput[]; errors: string[]; issues: ValidationIssue[] }> {
   const errors: string[] = [];
   const issues: ValidationIssue[] = [];
+
+  const size = Buffer.isBuffer(buffer) ? buffer.length : buffer.byteLength;
+  if (size > MAX_FILE_SIZE) {
+    const msg = `檔案大小不可超過 ${MAX_FILE_SIZE / 1024 / 1024}MB`;
+    errors.push(msg);
+    issues.push({
+      code: "FILE_TOO_LARGE",
+      severity: "error",
+      sheet: "system",
+      message: msg,
+    });
+    return { questions: [], errors, issues };
+  }
+
   const workbook = new ExcelJS.Workbook();
 
   try {
@@ -106,6 +126,18 @@ export async function parseSurveyExcel(
     };
   }
 
+  if (workbook.worksheets.length > MAX_SHEETS) {
+    const msg = `工作表數量過多（最多 ${MAX_SHEETS} 個，目前包含 ${workbook.worksheets.length} 個）`;
+    errors.push(msg);
+    issues.push({
+      code: "SHEET_LIMIT_EXCEEDED",
+      severity: "error",
+      sheet: "system",
+      message: msg,
+    });
+    return { questions: [], errors, issues };
+  }
+
   const questionsSheet =
     workbook.getWorksheet("questions") || workbook.getWorksheet("Questions") || workbook.worksheets[0];
   const choicesSheet =
@@ -121,6 +153,34 @@ export async function parseSurveyExcel(
       message: msg,
     });
     return { questions: [], errors, issues };
+  }
+
+  const qRowCount = questionsSheet.rowCount || 0;
+  if (qRowCount > MAX_QUESTION_ROWS) {
+    const msg = `questions 工作表列數過多（最多 ${MAX_QUESTION_ROWS} 列，目前約 ${qRowCount} 列）`;
+    errors.push(msg);
+    issues.push({
+      code: "ROW_LIMIT_EXCEEDED",
+      severity: "error",
+      sheet: "questions",
+      message: msg,
+    });
+    return { questions: [], errors, issues };
+  }
+
+  if (choicesSheet) {
+    const cRowCount = choicesSheet.rowCount || 0;
+    if (cRowCount > MAX_CHOICE_ROWS) {
+      const msg = `choices 工作表列數過多（最多 ${MAX_CHOICE_ROWS} 列，目前約 ${cRowCount} 列）`;
+      errors.push(msg);
+      issues.push({
+        code: "ROW_LIMIT_EXCEEDED",
+        severity: "error",
+        sheet: "choices",
+        message: msg,
+      });
+      return { questions: [], errors, issues };
+    }
   }
 
   // 1. 解析 Questions
@@ -175,8 +235,38 @@ export async function parseSurveyExcel(
       return;
     }
 
+    if (title.length > MAX_CELL_LENGTH) {
+      const msg = `第 ${rowNumber} 列 [${code}]：題目標題過長（最多 ${MAX_CELL_LENGTH} 字元）`;
+      errors.push(msg);
+      issues.push({
+        code: "CELL_TOO_LONG",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "title",
+        field: "title",
+        message: msg,
+      });
+      return;
+    }
+
     const orderNum = parseNumber(getVal("order_num")) ?? rowNumber - 1;
     const description = getVal("description") ? String(getVal("description")).trim() : null;
+    if (description && description.length > MAX_CELL_LENGTH) {
+      const msg = `第 ${rowNumber} 列 [${code}]：題目說明過長（最多 ${MAX_CELL_LENGTH} 字元）`;
+      errors.push(msg);
+      issues.push({
+        code: "CELL_TOO_LONG",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "description",
+        field: "description",
+        message: msg,
+      });
+      return;
+    }
+
     const rawType = String(getVal("question_type") || "single_choice").trim();
 
     const typeParse = QuestionTypeEnum.safeParse(rawType);
@@ -298,6 +388,21 @@ export async function parseSurveyExcel(
           row: rowNumber,
           column: !label ? "label" : "value",
           field: !label ? "label" : "value",
+          message: msg,
+        });
+        return;
+      }
+
+      if (label.length > MAX_CELL_LENGTH) {
+        const msg = `choices 工作表第 ${rowNumber} 列 [${qCode}]：選項標題過長（最多 ${MAX_CELL_LENGTH} 字元）`;
+        errors.push(msg);
+        issues.push({
+          code: "CELL_TOO_LONG",
+          severity: "error",
+          sheet: "choices",
+          row: rowNumber,
+          column: "label",
+          field: "label",
           message: msg,
         });
         return;
