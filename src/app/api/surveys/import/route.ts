@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSurveyExcel } from "@/lib/excel-parser";
+import { parseSurveyExcel, hasValidXlsxSignature } from "@/lib/excel-parser";
 import { validateQuestionsStructure } from "@/lib/survey-engine";
 import { db } from "@/lib/db";
 import { QuestionType, SurveyStatus } from "@prisma/client";
@@ -35,6 +35,28 @@ export async function POST(req: NextRequest) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
+
+    // ===== Magic Bytes 簽章安全檢查 =====
+    if (!hasValidXlsxSignature(arrayBuffer)) {
+      const issue: ValidationIssue = {
+        code: "FILE_SIGNATURE_INVALID",
+        severity: "error",
+        sheet: "system",
+        message: "檔案內容不是有效的 Excel (.xlsx) 格式（可能被竄改副檔名或檔案損毀）",
+      };
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: issue.message,
+          errors: [issue],
+          warnings: [],
+        } satisfies ImportResponse,
+        { status: 400 }
+      );
+    }
+    // ===== 檢查結束 =====
+
     const { questions, errors: parseErrors, issues: parseIssues } = await parseSurveyExcel(
       Buffer.from(arrayBuffer)
     );

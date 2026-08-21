@@ -2,10 +2,28 @@ import { describe, it, expect } from "vitest";
 import path from "path";
 import fs from "fs";
 import { generateDemoExcel } from "../scripts/generate-demo-excel";
-import { parseSurveyExcel, generateSurveyExportExcel } from "../src/lib/excel-parser";
+import {
+  parseSurveyExcel,
+  generateSurveyExportExcel,
+  hasValidXlsxSignature,
+} from "../src/lib/excel-parser";
 
 describe("Excel 題庫匯入與報表匯出測試 (Excel Parser & Exporter Tests)", () => {
   const testExcelPath = path.join(process.cwd(), "test-excel-parser.xlsx");
+
+  it("應能正確檢驗合法與非法的 XLSX Magic Bytes 檔案簽章 (hasValidXlsxSignature)", () => {
+    // 1. 合法 ZIP / XLSX magic bytes (0x50, 0x4B, 0x03, 0x04)
+    const validHeader = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
+    expect(hasValidXlsxSignature(validHeader)).toBe(true);
+
+    // 2. 假檔案（如純文字被改名為 .xlsx）
+    const fakeTextFile = Buffer.from("this is a plain text file pretending to be xlsx");
+    expect(hasValidXlsxSignature(fakeTextFile)).toBe(false);
+
+    // 3. 長度不足 4 bytes
+    const tooShort = Buffer.from([0x50, 0x4b]);
+    expect(hasValidXlsxSignature(tooShort)).toBe(false);
+  });
 
   it("應能成功產生包含 11 題 (含條件跳題) 之 Demo Excel 檔案", async () => {
     await generateDemoExcel(testExcelPath);

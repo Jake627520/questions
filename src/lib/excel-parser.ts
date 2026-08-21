@@ -32,6 +32,25 @@ function getCellValue(cell: ExcelJS.Cell): any {
 }
 
 /**
+ * 檢查是否為合法的 XLSX（OOXML）檔案
+ * XLSX 本質是 ZIP 容器，開頭 magic bytes 必須是 PK\x03\x04 (0x50, 0x4B, 0x03, 0x04)
+ */
+export function hasValidXlsxSignature(buffer: ArrayBuffer | Buffer): boolean {
+  const bytes = Buffer.isBuffer(buffer)
+    ? buffer
+    : Buffer.from(buffer);
+
+  if (bytes.length < 4) return false;
+
+  return (
+    bytes[0] === 0x50 && // P
+    bytes[1] === 0x4b && // K
+    bytes[2] === 0x03 &&
+    bytes[3] === 0x04
+  );
+}
+
+/**
  * 清理 Excel 檔案中可能引發 ExcelJS 崩潰的 comments/vmlDrawing 關聯
  */
 async function sanitizeExcelBuffer(buffer: ArrayBuffer | Buffer): Promise<Buffer> {
