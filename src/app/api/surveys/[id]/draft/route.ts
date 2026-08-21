@@ -92,7 +92,7 @@ export async function POST(
       }
 
       return resp;
-    });
+    }, { maxWait: 15000, timeout: 30000 });
 
     return NextResponse.json({
       success: true,
