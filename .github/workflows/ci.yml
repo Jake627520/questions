@@ -38,12 +38,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma Client & Sync Database
+      - name: Generate Prisma Client & Run Migrations
         env:
           DATABASE_URL: "postgresql://postgres:postgrespassword@localhost:5432/survey_db?schema=public"
         run: |
           npx prisma generate
-          npx prisma db push
+          npx prisma migrate deploy
 
       - name: Run ESLint
         run: npm run lint
