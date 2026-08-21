@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -39,7 +39,7 @@ export default function SurveyResponsesPage() {
   const [filter, setFilter] = useState<"ALL" | "COMPLETED" | "IN_PROGRESS">("ALL");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchResponses = async () => {
+  const fetchResponses = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(`/api/surveys/${id}/responses`);
@@ -56,7 +56,7 @@ export default function SurveyResponsesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   const handleDeleteDraft = async (responseId: string) => {
     if (!confirm("確定要刪除這筆未完成的草稿嗎？刪除後無法恢復。")) return;
@@ -80,7 +80,7 @@ export default function SurveyResponsesPage() {
 
   useEffect(() => {
     if (id) fetchResponses();
-  }, [id]);
+  }, [id, fetchResponses]);
 
   const filteredResponses = responses.filter((r) => {
     if (filter === "ALL") return true;

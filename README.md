@@ -2,7 +2,8 @@
 
 一個以「原始答案」為核心的問卷系統，而非考試系統。
 
-**目前版本：v0.1.0 (Preview)**
+**目前版本：v0.1.0 (Production Readiness Preview)**  
+**專案狀態：Active / Open Source**
 
 ---
 
@@ -10,7 +11,7 @@
 - **題型、答案、計分三者完全分離**
 - **原始答案是核心資料，計分只是可選功能**
 - **`score = null`（不計分）與 `score = 0`（零分）嚴格區分**
-- **支援條件跳題、草稿暫存、問卷版本控制**
+- **支援條件跳題、草稿暫存、問卷版本控制、發布鎖定防呆**
 
 ---
 
@@ -22,7 +23,7 @@
    - 負向題目自動反向計分（如 1~5 分自動反轉為 5~1 分）。
    - 條件隱藏題目自動豁免必填，且**絕不計入總分、滿分與統計分母**。
 2. **📊 Excel 雙向批量維護（1 秒發布大型問卷）**
-   - 告別網頁上一題一題手動新增的繁瑣操作，直接使用 Excel 批量編輯題目與選項，1 秒拖曳匯入立即生成問卷。
+   - 告別網頁上一題一題手動新增的繁瑣操作，直接使用 Excel 批量編輯題目與選項，1 秒拖曳匯入立即生成問卷（詳見 [Excel 題庫製作 SOP](./EXCEL_IMPORT_SOP.md)）。
    - 內建錯誤定位診斷：格式有誤時精確指出 `第 X 列 [題目代碼]` 與具體原因。
 3. **🧠 直覺條件跳題（支援中文選項標籤比對）**
    - 支援自然語言簡寫語法（如 `SHOW IF Q1 in [非常不滿意, 不太滿意]`、`SHOW IF Q5 contains Slack`），非工程人員也能輕鬆設定邏輯。
@@ -30,13 +31,15 @@
 4. **🔒 100% 本地優先與資料隱私（Local-First & Self-Hosted）**
    - 0 外部 API 依賴、0 雲端洩漏風險、0 訂閱費用。
    - 機密問卷、考核評估與敏感填答紀錄完全存放在您本機的 PostgreSQL 資料庫中。
-5. **🛡️ 嚴謹的業務防呆與人性化體驗**
+   - 內建匿名問卷策略（`is_anonymous` 預設開啟），絕不私自記錄使用者身分。
+5. **🛡️ 嚴謹的業務防呆與資料正規化**
+   - 複選題採用 `AnswerChoice` 正規化關聯模型，兼具原始答案儲存與高效率查詢。
+   - 問卷發布保護鎖（Published Lock）：已發布問卷禁止直接竄改題目，修改時強制複製為新版本（`version + 1`）。
    - 「以上皆非」嚴格互斥防呆，禁止與其他選項同時勾選。
    - 「其他」選項自動展開輸入框，支援強制要求填寫文字。
    - 支援填答者中途隨時「暫存進度」，透過專屬連結隨時無縫恢復作答。
-   - 問卷版本一鍵複製升級（`version + 1`），歷史填答資料完全隔離保存。
-6. **🧪 56 項自動化測試保證極致穩定**
-   - 核心運算引擎具備 100% 通過之自動化測試，確保所有計算與邊界條件精準無誤。
+6. **🧪 60+ 項自動化測試保證極致穩定**
+   - 包含 Excel 雙向 Round-trip 零損保真度測試、確定性統計測試與 26 題大型複雜題庫測試。
 
 ---
 
@@ -47,57 +50,37 @@
 
 ---
 
-## 目前已支援功能
-- **Excel 雙 Sheet 匯入 / 匯出**：標準 `questions` 與 `choices` 工作表解析與報表匯出（詳見 [Excel 題庫製作 SOP](./EXCEL_IMPORT_SOP.md)）
-- **完整題型支援**：單選 (`single_choice`)、複選 (`multiple_choice`)、問答 (`text`)、數字 (`number`)、是非 (`yes_no`)、說明文字 (`info`)
-- **特殊選項機制**：
-  - 「其他」（`is_other` + `requires_text`）：必須填寫補充文字
-  - 「以上皆非」（`is_none_of_above`）：與其他選項嚴格互斥
-- **多元計分規則**：
-  - 題目可自選啟用/停用計分（`scoring_enabled`）
-  - 特殊分數設定（支援非線性分值）
-  - 負向題目反向計分（`reverse_score`）
-- **條件跳題邏輯**：
-  - 支援直覺簡寫語法（如 `SHOW IF Q1 in [非常不滿意, 不太滿意]`、`SHOW IF Q5 contains Slack`、`HIDE IF ...`）
-  - 同時支援選項代碼（`value`）與選項中文標籤（`label`）智慧比對
-  - 條件題目顯現時支援提示文字（`visibility_hint`）
-- **循環相依檢測**：拓撲有向圖循環檢測，匯入時主動攔截環狀依賴
-- **草稿暫存與恢復**：支援中途保存進度（`IN_PROGRESS`），以 `?responseId=...` 無縫恢復作答
-- **回覆名單與草稿管理**：支援回覆列表篩選、草稿刪除，正式回覆（`COMPLETED`）防誤刪保護
-- **問卷版本複製**：一鍵複製新版本（`version + 1`），歷史回覆隔離保護
-- **即時統計分析**：跳題隱藏之題目精確排除在分母之外
-- **自動化測試覆蓋**：累計 56 項自動化測試全數通過 (100% PASS)
+## 🚫 已知限制與刻意不做範圍 (Known Limitations)
+為了維持核心問卷引擎的精準、輕量與高可靠度，本專案目前刻意不內建以下功能：
+- 登入、註冊與 Google OAuth 帳號系統
+- 多租戶（Multi-tenancy）與 SaaS 計費模組
+- 複雜拖拉視覺化編輯器（直接以 Excel 批量編輯效率更高）
+- 自動發送 Email / 簡訊 / 產出 QR Code / AI 自動分析總結
 
 ---
 
-## 尚未支援（刻意不做）
-- 登入與權限系統
-- 多租戶
-- 雲端部署方案
-- 視覺化規則編輯器
-- Email / QR Code / 多語言 / AI 分析
-
----
-
-## 技術棧
+## 🛠️ 技術棧
 - **框架**：Next.js 14 (App Router) + TypeScript
 - **資料庫與 ORM**：PostgreSQL + Prisma ORM
 - **試算表處理**：ExcelJS
 - **資料驗證**：Zod
 - **測試工具**：Vitest
+- **容器化**：Docker & Docker Compose
 
 ---
 
-## 快速開始（本地運行）
+## 🚀 快速開始
 
-### 1. 下載專案並安裝相依套件
+### 方式 A：使用本地 Node.js 運行
+
+#### 1. 下載專案並安裝相依套件
 ```bash
 git clone https://github.com/Jake627520/questions.git
 cd questions
 npm install
 ```
 
-### 2. 設定環境變數與資料庫
+#### 2. 設定環境變數與資料庫
 複製環境變數範本並設定本地 PostgreSQL 連線字串：
 ```bash
 cp .env.example .env
@@ -112,12 +95,12 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/survey_db?schema=pub
 npx prisma db push
 ```
 
-### 3. 載入示範資料（可選）
+#### 3. 載入示範資料（可選）
 ```bash
 npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/seed.ts
 ```
 
-### 4. 啟動本機伺服器
+#### 4. 啟動本機伺服器
 ```bash
 # 僅本機電腦訪問
 npm run dev
@@ -127,17 +110,55 @@ npm run dev -- -H 0.0.0.0
 ```
 開啟瀏覽器訪問：`http://localhost:3000`
 
-### 5. 執行自動化測試
+---
+
+### 方式 B：使用 Docker Compose 一鍵啟動 (推薦)
+
+本專案提供 Production Multi-stage Dockerfile 與具備 Healthcheck 的 `docker-compose.yml`：
+
 ```bash
+# 一鍵建立並啟動 PostgreSQL 與問卷系統
+docker compose up -d
+```
+啟動完成後，直接於瀏覽器訪問 `http://localhost:3000` 即可使用！
+
+---
+
+## 🧪 執行自動化測試與代碼檢查
+
+```bash
+# 執行型別檢查
+npm run typecheck
+
+# 執行程式碼 Lint
+npm run lint
+
+# 執行全套 Vitest 測試（包含 Round-trip 與統計測試）
 npm test
+
+# 執行生產建置
+npm run build
 ```
 
 ---
 
-## 授權
-本專案採用 [MIT License](./LICENSE)。
+## 📚 相關文件
+- [Excel 題庫製作 SOP (EXCEL_IMPORT_SOP.md)](./EXCEL_IMPORT_SOP.md)
+- [響應式多裝置 UAT 檢核清單 (UAT_RESPONSIVE_CHECKLIST.md)](./UAT_RESPONSIVE_CHECKLIST.md)
+- [開發與貢獻指南 (CONTRIBUTING.md)](./CONTRIBUTING.md)
+- [版本更新記錄 (CHANGELOG.md)](./CHANGELOG.md)
 
 ---
 
-## 免責聲明
-本軟體按「現況」提供，不提供任何明示或暗示的保證。目前為早期預覽版本（v0.1.0），不建議直接用於正式生產環境。
+## 📜 授權與問卷內容版權宣告 (Copyright & Content Notice)
+
+1. **程式碼授權**：本專案程式碼採 [MIT License](./LICENSE)。
+2. **問卷內容版權聲明**：
+   - **MIT License 僅適用於本專案程式碼本身**，不代表使用者匯入的問卷題目、量表、題庫、圖片、文字或其他內容均可自由使用。
+   - 使用第三方問卷、心理量表、學術研究量表、商業題庫或其他受版權保護之內容前，**使用者必須自行確認其合法授權條件**。
+   - 專案內建之示範題庫（`demo-survey.xlsx` 及 `demo-complex-survey.xlsx`）均為原創建立之測試內容。
+
+---
+
+## ⚠️ 免責聲明
+本軟體按「現況」提供，不提供任何明示或暗示的保證。目前為預覽版本（v0.1.0），使用者需自行承擔使用風險。

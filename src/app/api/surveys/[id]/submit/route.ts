@@ -122,7 +122,7 @@ export async function POST(
         if (!qRecord) continue;
         const sub = inputMap.get(qResult.questionCode);
 
-        await tx.answer.create({
+        const createdAnswer = await tx.answer.create({
           data: {
             responseId: response.id,
             questionId: qRecord.id,
@@ -131,6 +131,25 @@ export async function POST(
             score: qResult.score,
           },
         });
+
+        // 若為選擇題型，寫入正規化 answer_choices 關聯
+        if (["single_choice", "multiple_choice", "yes_no"].includes(qRecord.questionType) && qRecord.choices.length > 0) {
+          const rawVal = sub?.rawValue;
+          const selectedValues = Array.isArray(rawVal) ? rawVal.map(String) : (rawVal !== null && rawVal !== undefined ? [String(rawVal)] : []);
+          const matchedChoiceIds = qRecord.choices
+            .filter((c) => selectedValues.includes(c.value))
+            .map((c) => c.id);
+
+          if (matchedChoiceIds.length > 0) {
+            await tx.answerChoice.createMany({
+              data: matchedChoiceIds.map((cid) => ({
+                answerId: createdAnswer.id,
+                choiceId: cid,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
       }
 
       return response;

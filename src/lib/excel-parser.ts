@@ -406,3 +406,115 @@ export async function generateSurveyExportExcel(data: {
   const arrayBuffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(arrayBuffer);
 }
+
+/**
+ * 將 Survey 定義導出為標準雙 Sheet 題庫 Excel (questions 與 choices)，供無損匯入測試與備份
+ */
+export async function exportSurveyToExcel(
+  survey: {
+    title: string;
+    description?: string | null;
+    questions: Array<{
+      orderNum: number;
+      code: string;
+      title: string;
+      description?: string | null;
+      questionType: QuestionType;
+      required: boolean;
+      scoringEnabled: boolean;
+      reverseScore: boolean;
+      visibilityRules?: any;
+      visibilityHint?: string | null;
+      minSelections?: number | null;
+      maxSelections?: number | null;
+      minValue?: number | null;
+      maxValue?: number | null;
+      choices: Array<{
+        orderNum: number;
+        label: string;
+        value: string;
+        scoreEnabled: boolean;
+        score?: number | null;
+        isOther: boolean;
+        requiresText: boolean;
+        isNoneOfAbove: boolean;
+      }>;
+    }>;
+  },
+  _responses: any[] = []
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Survey System MVP";
+
+  // Sheet 1: questions
+  const qSheet = workbook.addWorksheet("questions");
+  qSheet.columns = [
+    { header: "order_num", key: "order_num", width: 10 },
+    { header: "code", key: "code", width: 18 },
+    { header: "title", key: "title", width: 45 },
+    { header: "description", key: "description", width: 40 },
+    { header: "question_type", key: "question_type", width: 18 },
+    { header: "required", key: "required", width: 12 },
+    { header: "scoring_enabled", key: "scoring_enabled", width: 15 },
+    { header: "reverse_score", key: "reverse_score", width: 14 },
+    { header: "visibility_rules", key: "visibility_rules", width: 45 },
+    { header: "visibility_hint", key: "visibility_hint", width: 40 },
+    { header: "min_selections", key: "min_selections", width: 15 },
+    { header: "max_selections", key: "max_selections", width: 15 },
+    { header: "min_value", key: "min_value", width: 12 },
+    { header: "max_value", key: "max_value", width: 12 },
+  ];
+
+  survey.questions.forEach((q) => {
+    qSheet.addRow({
+      order_num: q.orderNum,
+      code: q.code,
+      title: q.title,
+      description: q.description || "",
+      question_type: q.questionType,
+      required: q.required ? "TRUE" : "FALSE",
+      scoring_enabled: q.scoringEnabled ? "TRUE" : "FALSE",
+      reverse_score: q.reverseScore ? "TRUE" : "FALSE",
+      visibility_rules: q.visibilityRules ? (typeof q.visibilityRules === "string" ? q.visibilityRules : JSON.stringify(q.visibilityRules)) : "",
+      visibility_hint: q.visibilityHint || "",
+      min_selections: q.minSelections ?? "",
+      max_selections: q.maxSelections ?? "",
+      min_value: q.minValue ?? "",
+      max_value: q.maxValue ?? "",
+    });
+  });
+
+  // Sheet 2: choices
+  const cSheet = workbook.addWorksheet("choices");
+  cSheet.columns = [
+    { header: "question_code", key: "question_code", width: 18 },
+    { header: "order_num", key: "order_num", width: 10 },
+    { header: "label", key: "label", width: 35 },
+    { header: "value", key: "value", width: 25 },
+    { header: "score_enabled", key: "score_enabled", width: 15 },
+    { header: "score", key: "score", width: 10 },
+    { header: "is_other", key: "is_other", width: 12 },
+    { header: "requires_text", key: "requires_text", width: 14 },
+    { header: "is_none_of_above", key: "is_none_of_above", width: 16 },
+  ];
+
+  survey.questions.forEach((q) => {
+    q.choices.forEach((c) => {
+      cSheet.addRow({
+        question_code: q.code,
+        order_num: c.orderNum,
+        label: c.label,
+        value: c.value,
+        score_enabled: c.scoreEnabled ? "TRUE" : "FALSE",
+        score: c.scoreEnabled ? (c.score ?? 0) : "",
+        is_other: c.isOther ? "TRUE" : "FALSE",
+        requires_text: c.requiresText ? "TRUE" : "FALSE",
+        is_none_of_above: c.isNoneOfAbove ? "TRUE" : "FALSE",
+      });
+    });
+  });
+
+  const arrayBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
+}
+

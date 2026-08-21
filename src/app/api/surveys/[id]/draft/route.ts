@@ -16,7 +16,11 @@ export async function POST(
     const survey = await db.survey.findUnique({
       where: { id },
       include: {
-        questions: true,
+        questions: {
+          include: {
+            choices: true,
+          },
+        },
       },
     });
 
@@ -58,7 +62,7 @@ export async function POST(
         const qRecord = qMap.get(ans.questionCode);
         if (!qRecord) continue;
 
-        await tx.answer.create({
+        const createdAnswer = await tx.answer.create({
           data: {
             responseId: resp.id,
             questionId: qRecord.id,
@@ -67,6 +71,24 @@ export async function POST(
             score: null, // 草稿不計分
           },
         });
+
+        if (["single_choice", "multiple_choice", "yes_no"].includes(qRecord.questionType) && qRecord.choices.length > 0) {
+          const rawVal = ans.rawValue;
+          const selectedValues = Array.isArray(rawVal) ? rawVal.map(String) : (rawVal !== null && rawVal !== undefined ? [String(rawVal)] : []);
+          const matchedChoiceIds = qRecord.choices
+            .filter((c) => selectedValues.includes(c.value))
+            .map((c) => c.id);
+
+          if (matchedChoiceIds.length > 0) {
+            await tx.answerChoice.createMany({
+              data: matchedChoiceIds.map((cid) => ({
+                answerId: createdAnswer.id,
+                choiceId: cid,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
       }
 
       return resp;

@@ -36,3 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 回覆名單與草稿管理頁面（支援草稿刪除、已完成回覆保護）。
 - Excel 匯入多錯誤定位強化（附帶 Excel 列號與題目代碼）。
 - 累計 56 項自動化測試全數通過。
+
+### Milestone 5 (M5) - Production Readiness & Hardening
+- **複選題資料正規化**：新增 `AnswerChoice` (`answer_choices`) 關聯模型，並保持 `raw_value` 原始答案 100% 向後相容。
+- **問卷發布保護鎖 (Published Survey Lock)**：已發布問卷鎖定題目結構不可修改，強制以版本複製 (`version + 1`) 升級。
+- **匿名問卷策略**：新增 `is_anonymous` 與 `collect_identity` 欄位，嚴格保護作答隱私。
+- **Excel Round-trip 雙向無損測試**：驗證 `Excel -> Import -> DB -> Export -> Re-import` 完整流程 0 屬性遺失。
+- **26 題大型複雜題庫**：產出 `demo-complex-survey.xlsx`，涵蓋 6 大題型與所有 15+ 項進階業務防呆。
+- **確定性統計基準資料集**：固定資料集檢驗百分比、平均數、0分 vs NULL、隱藏題排除與草稿排除。
+- **GitHub Actions CI**：建立 `.github/workflows/ci.yml`（Node 20 + PostgreSQL service + lint + typecheck + test + build）。
+- **Production Docker**：建立 Multi-stage `Dockerfile` 與具備 PostgreSQL healthcheck 的 `docker-compose.yml`。
+- **安全與開源文件強化**：建立 `CONTRIBUTING.md`、`UAT_RESPONSIVE_CHECKLIST.md` 與問卷內容版權告示。
+- 累計 **61 項自動化測試全數通過**。

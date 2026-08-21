@@ -34,6 +34,8 @@ model Survey {
   title          String
   description    String?      @db.Text
   status         SurveyStatus @default(DRAFT)
+  isAnonymous    Boolean      @default(true) @map("is_anonymous")
+  collectIdentity Boolean     @default(false) @map("collect_identity")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
@@ -85,7 +87,8 @@ model Choice {
   requiresText  Boolean  @default(false) @map("requires_text")
   isNoneOfAbove Boolean  @default(false) @map("is_none_of_above")
 
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers  AnswerChoice[]
 
   @@index([questionId, orderNum])
   @@map("choices")
@@ -117,10 +120,26 @@ model Answer {
   otherText  String?  @map("other_text") @db.Text
   score      Float?
 
-  response Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  response Response       @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  choices  AnswerChoice[]
 
   @@index([responseId])
   @@index([questionId])
   @@map("answers")
+}
+
+model AnswerChoice {
+  id        String   @id @default(cuid())
+  answerId  String   @map("answer_id")
+  choiceId  String   @map("choice_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  answer Answer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  choice Choice @relation(fields: [choiceId], references: [id], onDelete: Cascade)
+
+  @@unique([answerId, choiceId])
+  @@index([answerId])
+  @@index([choiceId])
+  @@map("answer_choices")
 }
