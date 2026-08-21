@@ -2,7 +2,7 @@
 
 一個以「原始答案」為核心的問卷系統，而非考試系統。
 
-**目前版本：v0.1.0 (Production Readiness Preview)**  
+**目前版本：v0.2.0 (Production Readiness Preview)**  
 **專案狀態：Active / Open Source**
 
 ---
