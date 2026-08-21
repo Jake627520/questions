@@ -22,6 +22,7 @@ describe("P0-4 Excel Round-trip 雙向無損保真度測試 (Excel Round-trip Fi
     // 3. 儲存至 DB
     const survey = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "Round-trip 保真度測試問卷",
         version: 1,
         isAnonymous: true,

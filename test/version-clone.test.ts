@@ -6,6 +6,7 @@ describe("M3 問卷版本複製測試 (Version Clone Tests)", () => {
   it("應能複製問卷為新版本 (version + 1)，並完整複製題目與選項", async () => {
     const parent = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "版本來源問卷",
         version: 1,
         status: SurveyStatus.PUBLISHED,
@@ -37,6 +38,7 @@ describe("M3 問卷版本複製測試 (Version Clone Tests)", () => {
     const nextVersion = parent.version + 1;
     const cloned = await db.survey.create({
       data: {
+        organizationId: parent.organizationId,
         title: `${parent.title} (v${nextVersion})`,
         version: nextVersion,
         parentSurveyId: parent.id,

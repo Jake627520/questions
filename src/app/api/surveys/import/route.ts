@@ -53,15 +53,18 @@ export async function POST(req: NextRequest) {
     }
 
     let version = 1;
+    let organizationId = "default-org-id";
     if (parentSurveyId) {
       const parent = await db.survey.findUnique({ where: { id: parentSurveyId } });
       if (parent) {
         version = parent.version + 1;
+        organizationId = parent.organizationId;
       }
     }
 
     const survey = await db.survey.create({
       data: {
+        organizationId,
         title,
         description,
         status,

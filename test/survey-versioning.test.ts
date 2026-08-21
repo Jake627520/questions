@@ -7,6 +7,7 @@ describe("M2 問卷版本控制測試 (Survey Versioning Tests)", () => {
     // 建立 v1 問卷
     const surveyV1 = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "版本測試問卷 v1",
         version: 1,
         status: SurveyStatus.PUBLISHED,
@@ -44,6 +45,7 @@ describe("M2 問卷版本控制測試 (Survey Versioning Tests)", () => {
     // 建立 v2 問卷 (指向 parentSurveyId)
     const surveyV2 = await db.survey.create({
       data: {
+        organizationId: surveyV1.organizationId,
         title: "版本測試問卷 v2",
         parentSurveyId: surveyV1.id,
         version: surveyV1.version + 1,

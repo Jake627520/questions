@@ -7,6 +7,7 @@ describe("M3 草稿暫存與恢復測試 (Draft Response Tests)", () => {
     // 建立測試問卷
     const survey = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "草稿測試問卷",
         version: 1,
         status: SurveyStatus.PUBLISHED,

@@ -13,6 +13,7 @@ describe("P0-6 確定性統計測試資料集 (Deterministic Statistics Dataset 
     // 建立標準基準問卷
     const survey = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "確定性統計基準問卷",
         status: SurveyStatus.PUBLISHED,
         questions: {

@@ -7,6 +7,7 @@ describe("P0-2 已發布問卷鎖定測試 (Published Survey Lock Tests)", () =>
     // 1. 建立並發布問卷
     const survey = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "發布鎖定測試問卷",
         status: SurveyStatus.PUBLISHED,
         questions: {
@@ -22,6 +23,7 @@ describe("P0-2 已發布問卷鎖定測試 (Published Survey Lock Tests)", () =>
     // 3. 模擬 Version Clone 解鎖修改流程
     const newVersion = await db.survey.create({
       data: {
+        organizationId: survey.organizationId,
         parentSurveyId: survey.id,
         version: survey.version + 1,
         title: `${survey.title} (v2)`,

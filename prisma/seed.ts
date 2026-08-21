@@ -35,9 +35,20 @@ async function main() {
     await prisma.survey.delete({ where: { id: existingSurvey.id } });
   }
 
+  const defaultOrg = await prisma.organization.upsert({
+    where: { slug: "default" },
+    update: {},
+    create: {
+      id: "default-org-id",
+      name: "Default Workspace",
+      slug: "default",
+    },
+  });
+
   // Create demo survey
   const survey = await prisma.survey.create({
     data: {
+      organizationId: defaultOrg.id,
       title: "2026 產品體驗與服務滿意度調查 (Demo Survey)",
       description:
         "這是一份包含 11 題多元題型、條件跳題、複選 min/max 限制、數值範圍檢核、計分模式、反向計分、特殊給分、0分與NULL區分、及必填補充說明之示範問卷。",

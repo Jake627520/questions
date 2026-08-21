@@ -6,6 +6,7 @@ describe("M3 隱藏題與草稿在統計中的排除測試 (Stats Hidden & Draft
   it("統計時應排除 IN_PROGRESS 草稿，且跳題隱藏的題目不納入各題作答分母", async () => {
     const survey = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "統計排除測試問卷",
         version: 1,
         status: SurveyStatus.PUBLISHED,

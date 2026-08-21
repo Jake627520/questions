@@ -6,6 +6,7 @@ describe("M4 回覆與草稿管理測試 (Response Management Tests)", () => {
   it("應能正確查詢回覆列表、允許刪除 IN_PROGRESS 草稿，並保護 COMPLETED 正式回覆", async () => {
     const survey = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "回覆管理測試問卷",
         status: SurveyStatus.PUBLISHED,
         questions: {

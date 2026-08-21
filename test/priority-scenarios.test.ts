@@ -192,6 +192,7 @@ describe("優先測試情境驗證 (Priority Scenarios 1 ~ 10)", () => {
   it("情境 9: 問卷版本建立與歷史 response 隔離保留", async () => {
     const surveyV1 = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "歷史版本測試問卷",
         version: 1,
         status: SurveyStatus.PUBLISHED,
@@ -211,6 +212,7 @@ describe("優先測試情境驗證 (Priority Scenarios 1 ~ 10)", () => {
 
     const surveyV2 = await db.survey.create({
       data: {
+        organizationId: surveyV1.organizationId,
         title: "歷史版本測試問卷 (v2)",
         parentSurveyId: surveyV1.id,
         version: 2,

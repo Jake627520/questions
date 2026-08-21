@@ -31,6 +31,7 @@ export async function POST(
 
     const clonedSurvey = await db.survey.create({
       data: {
+        organizationId: sourceSurvey.organizationId,
         title: newTitle,
         description: sourceSurvey.description,
         status: SurveyStatus.PUBLISHED,

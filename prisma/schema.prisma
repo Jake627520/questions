@@ -27,23 +27,79 @@ enum QuestionType {
   info
 }
 
-model Survey {
-  id             String       @id @default(cuid())
-  parentSurveyId String?      @map("parent_survey_id")
-  version        Int          @default(1)
-  title          String
-  description    String?      @db.Text
-  status         SurveyStatus @default(DRAFT)
-  isAnonymous    Boolean      @default(true) @map("is_anonymous")
-  collectIdentity Boolean     @default(false) @map("collect_identity")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
 
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships    Membership[]
+  createdSurveys Survey[]     @relation("SurveyCreator")
+
+  @@map("users")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships Membership[]
+  surveys     Survey[]
+
+  @@map("organizations")
+}
+
+model Membership {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  role           Role     @default(EDITOR)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Survey {
+  id              String       @id @default(cuid())
+  organizationId  String       @map("organization_id")
+  createdById     String?      @map("created_by_id")
+  parentSurveyId  String?      @map("parent_survey_id")
+  version         Int          @default(1)
+  title           String
+  description     String?      @db.Text
+  status          SurveyStatus @default(DRAFT)
+  isAnonymous     Boolean      @default(true) @map("is_anonymous")
+  collectIdentity Boolean      @default(false) @map("collect_identity")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy      User?        @relation("SurveyCreator", fields: [createdById], references: [id], onDelete: SetNull)
   parentSurvey   Survey?      @relation("SurveyVersions", fields: [parentSurveyId], references: [id], onDelete: SetNull)
   childVersions  Survey[]     @relation("SurveyVersions")
   questions      Question[]
   responses      Response[]
 
+  @@index([organizationId])
   @@map("surveys")
 }
 

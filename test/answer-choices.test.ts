@@ -6,6 +6,7 @@ describe("P0-1 複選與單選題 AnswerChoice 正規化關聯測試 (AnswerChoi
   it("提交複選與單選題答案時，應正確在 answer_choices 關聯表中建立規範化記錄", async () => {
     const survey = await db.survey.create({
       data: {
+        organizationId: "default-org-id",
         title: "AnswerChoice 關聯測試問卷",
         status: SurveyStatus.PUBLISHED,
         questions: {
