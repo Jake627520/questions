@@ -88,6 +88,8 @@ export interface ImportSummary {
 
 export interface ImportResponse {
   success: boolean;
+  /** 錯誤提示訊息（相容舊版） */
+  error?: string;
   /** 成功時回傳建立的 surveyId（或 importId） */
   surveyId?: string;
   importId?: string;

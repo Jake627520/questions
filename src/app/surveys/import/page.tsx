@@ -82,7 +82,13 @@ export default function ImportSurveyPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        setPreviewErrors(data.errors || [data.error || "解析失敗"]);
+        if (Array.isArray(data.errors) && data.errors.length > 0 && typeof data.errors[0] === "object") {
+          setPreviewErrors(data.errors.map((e: any) => e.message || String(e)));
+        } else if (Array.isArray(data.errors)) {
+          setPreviewErrors(data.errors);
+        } else {
+          setPreviewErrors([data.error || "解析失敗"]);
+        }
         if (data.questions) setPreviewData(data.questions);
       } else {
         setPreviewData(data.questions);
@@ -112,7 +118,14 @@ export default function ImportSurveyPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        const errorList = data.errors || [data.details ? `${data.error}: ${data.details}` : data.error || "匯入失敗"];
+        let errorList: string[] = [];
+        if (Array.isArray(data.errors) && data.errors.length > 0 && typeof data.errors[0] === "object") {
+          errorList = data.errors.map((e: any) => e.message || String(e));
+        } else if (Array.isArray(data.errors)) {
+          errorList = data.errors;
+        } else {
+          errorList = [data.details ? `${data.error}: ${data.details}` : data.error || "匯入失敗"];
+        }
         setPreviewErrors(errorList);
         alert(data.details ? `${data.error}：${data.details}` : data.error || "匯入失敗");
       } else {

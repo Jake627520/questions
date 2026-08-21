@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { QuestionInput, ChoiceInput, QuestionType, QuestionTypeEnum } from "./types";
+import { ValidationIssue } from "../types/surveyImport";
 
 function parseBoolean(val: any): boolean {
   if (typeof val === "boolean") return val;
@@ -61,8 +62,9 @@ async function sanitizeExcelBuffer(buffer: ArrayBuffer | Buffer): Promise<Buffer
  */
 export async function parseSurveyExcel(
   buffer: ArrayBuffer | Buffer
-): Promise<{ questions: QuestionInput[]; errors: string[] }> {
+): Promise<{ questions: QuestionInput[]; errors: string[]; issues: ValidationIssue[] }> {
   const errors: string[] = [];
+  const issues: ValidationIssue[] = [];
   const workbook = new ExcelJS.Workbook();
 
   try {
@@ -70,9 +72,18 @@ export async function parseSurveyExcel(
     // @ts-ignore
     await workbook.xlsx.load(cleanBuffer);
   } catch (err: any) {
+    const msg = `Excel 檔案讀取失敗：${err.message || "檔案損毀或非標準 XLSX 格式"}`;
+    errors.push(msg);
+    issues.push({
+      code: "FILE_PARSE_FAILED",
+      severity: "error",
+      sheet: "system",
+      message: msg,
+    });
     return {
       questions: [],
-      errors: [`Excel 檔案讀取失敗：${err.message || "檔案損毀或非標準 XLSX 格式"}`],
+      errors,
+      issues,
     };
   }
 
@@ -82,7 +93,15 @@ export async function parseSurveyExcel(
     workbook.getWorksheet("choices") || workbook.getWorksheet("Choices") || workbook.worksheets[1];
 
   if (!questionsSheet) {
-    return { questions: [], errors: ["Excel 檔案中未找到 questions 工作表"] };
+    const msg = "Excel 檔案中未找到 questions 工作表";
+    errors.push(msg);
+    issues.push({
+      code: "SHEET_MISSING",
+      severity: "error",
+      sheet: "system",
+      message: msg,
+    });
+    return { questions: [], errors, issues };
   }
 
   // 1. 解析 Questions
@@ -108,11 +127,32 @@ export async function parseSurveyExcel(
     if (!code && !title) return; // Skip completely empty rows
 
     if (!code) {
-      errors.push(`第 ${rowNumber} 列：題目代碼（code）為空`);
+      const msg = `第 ${rowNumber} 列：題目代碼（code）為空`;
+      errors.push(msg);
+      issues.push({
+        code: "REQUIRED_FIELD_EMPTY",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "code",
+        field: "code",
+        message: msg,
+      });
       return;
     }
     if (!title) {
-      errors.push(`第 ${rowNumber} 列 [${code}]：題目內容（title）為空`);
+      const msg = `第 ${rowNumber} 列 [${code}]：題目內容（title）為空`;
+      errors.push(msg);
+      issues.push({
+        code: "REQUIRED_FIELD_EMPTY",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "title",
+        field: "title",
+        value: code,
+        message: msg,
+      });
       return;
     }
 
@@ -122,7 +162,18 @@ export async function parseSurveyExcel(
 
     const typeParse = QuestionTypeEnum.safeParse(rawType);
     if (!typeParse.success) {
-      errors.push(`第 ${rowNumber} 列 [${code}]：題型「${rawType}」不合法`);
+      const msg = `第 ${rowNumber} 列 [${code}]：題型「${rawType}」不合法`;
+      errors.push(msg);
+      issues.push({
+        code: "INVALID_QUESTION_TYPE",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "question_type",
+        field: "question_type",
+        value: rawType,
+        message: msg,
+      });
       return;
     }
 
@@ -187,18 +238,49 @@ export async function parseSurveyExcel(
       if (!qCode && !label && !value) return; // Skip empty rows
 
       if (!qCode) {
-        errors.push(`choices 工作表第 ${rowNumber} 列：未指定題目代碼 (question_code)`);
+        const msg = `choices 工作表第 ${rowNumber} 列：未指定題目代碼 (question_code)`;
+        errors.push(msg);
+        issues.push({
+          code: "REQUIRED_FIELD_EMPTY",
+          severity: "error",
+          sheet: "choices",
+          row: rowNumber,
+          column: "question_code",
+          field: "question_code",
+          message: msg,
+        });
         return;
       }
 
       const q = questionsMap.get(qCode);
       if (!q) {
-        errors.push(`choices 工作表第 ${rowNumber} 列：指定的題目代碼「${qCode}」不存在於 questions 表中`);
+        const msg = `choices 工作表第 ${rowNumber} 列：指定的題目代碼「${qCode}」不存在於 questions 表中`;
+        errors.push(msg);
+        issues.push({
+          code: "QUESTION_NOT_FOUND",
+          severity: "error",
+          sheet: "choices",
+          row: rowNumber,
+          column: "question_code",
+          field: "question_code",
+          value: qCode,
+          message: msg,
+        });
         return;
       }
 
       if (!label || !value) {
-        errors.push(`choices 工作表第 ${rowNumber} 列 [${qCode}]：選項標題 (label) 或代碼 (value) 為空`);
+        const msg = `choices 工作表第 ${rowNumber} 列 [${qCode}]：選項標題 (label) 或代碼 (value) 為空`;
+        errors.push(msg);
+        issues.push({
+          code: "REQUIRED_FIELD_EMPTY",
+          severity: "error",
+          sheet: "choices",
+          row: rowNumber,
+          column: !label ? "label" : "value",
+          field: !label ? "label" : "value",
+          message: msg,
+        });
         return;
       }
 
@@ -231,6 +313,7 @@ export async function parseSurveyExcel(
   return {
     questions: questionsList,
     errors,
+    issues,
   };
 }
 
