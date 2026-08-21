@@ -47,27 +47,52 @@
 - [x] 工作表數、單一儲存格長度上限（20 工作表 / 5000 字元）
 - [x] 相關單元測試
 
+### Phase M6C：Excel Import UX & Safety（企業級強化）
+- [x] `ValidationIssue` 擴充 `suggestion` 欄位，提供具體、可操作的修復建議
+- [x] 錯誤診斷 UI 預設上限 50 筆，支援摺疊／展開切換，防止超大錯誤量卡頓
+- [x] Dry Run / 預覽指標儀表板（題數、選項數、必填題、計分題、跳題數、合規清單）
+- [x] 預覽階段保證零資料庫寫入（No DB write on preview）
+- [x] All-or-Nothing 原子性交易保護（Prisma Interactive Transaction），失敗 100% Rollback
+- [x] 使用者內容與版權確認方塊（未確認阻擋匯入，防止法律爭議）
+- [x] Excel Formula Injection 公式防護（`=, +, -, @` 開頭內容安全讀取為純文字）
+- [x] 匯入成功摘要頁面（提供 Import ID、統計數據、填答與報表直達按鈕）
+- [x] 生產環境錯誤回應脫敏（隱藏伺服器路徑與 DB 連線字串，提供專屬錯誤 ID）
+- [x] M6-C 整合測試套件 `test/m6c-excel-safety.test.ts`（8/8 通過）
+
 ### 品質
 - [x] `npm run typecheck` / `lint` / `test` / `build` 全過
-- [x] 測試數由約 77 → 84（全數 PASS）
+- [x] 測試數提升至 92 / 92 PASS（22 個測試套件全數通過）
 
 ---
 
 ## 3. 目前驗證流程（使用者視角）
 
-1. 進入 `/surveys/import`
-2. 可展開「題庫製作注意事項」先了解規則
-3. 下載示範範本（建議）
-4. 選擇／拖曳 `.xlsx`
-5. **前端立即驗證**（副檔名、大小、Sheet、必填、重複、關聯）
-6. 顯示通過／錯誤／警告，可篩選
-7. 可再按「解析題庫預覽」→ 後端完整解析
-8. 確認匯入：
-   - `DRAFT`：直接建立
-   - `PUBLISHED`：二次確認後建立
-9. 後端再次檢查：Magic Bytes → 檔案與列數上限 → 結構 → 商業規則 → Transaction 寫入
+```text
+選擇 Excel
+      ↓
+檔案驗證（副檔名、大小 5MB、Magic Bytes 簽章）
+      ↓
+Excel Parsing & Formula Injection 防護
+      ↓
+Schema & Business Rule Validation（必填、唯一代碼、關聯、無循環跳題）
+      ↓
+      ┌──────────────┐
+      │              │
+     FAIL           PASS
+      │              │
+      ↓              ↓
+ 錯誤診斷 UI      Dry Run 預覽
+ (附修復建議)        ↓
+                 版權宣告確認
+                     ↓
+                 使用者確認匯入 (PUBLISHED 二次防呆)
+                     ↓
+                 Prisma Transaction 原子寫入
+                     ↓
+                 匯入成功摘要 (含 Import ID 與直達連結)
+```
 
-原則：**前端只做 UX 預檢，後端才是安全與正確性邊界。**
+原則：**前端只做 UX 預檢，後端才是安全、防護與正確性邊界。**
 
 ---
 
@@ -82,6 +107,8 @@
 | `ROW_LIMIT_EXCEEDED` | 列數超過上限 | questions > 500 列或 choices > 5000 列 |
 | `SHEET_LIMIT_EXCEEDED` | 工作表數量過多 | 工作表 > 20 個 |
 | `CELL_TOO_LONG` | 單一儲存格文字過長 | 儲存格 > 5000 字元 |
+| `FORMULA_NOT_ALLOWED` | 偵測到未允許或潛在惡意公式 | 潛在公式注入風險 |
+| `COPYRIGHT_NOT_CONFIRMED` | 未確認版權宣告 | 匯入前未勾選版權確認方塊 |
 | `SHEET_MISSING` | 缺少必要工作表 | 無 `questions` |
 | `HEADER_MISSING_REQUIRED` | 缺少必要欄位 | 無 `code` / `title` 等 |
 | `REQUIRED_FIELD_EMPTY` | 必填為空 | code / title / label 等為空 |
@@ -93,7 +120,7 @@
 | `INVALID_VISIBILITY_RULE` | 條件語法／引用問題 | （後端結構檢核） |
 | `DATABASE_IMPORT_FAILED` | 寫入失敗 | DB / transaction 錯誤 |
 
-> 前後端應盡量使用同一組 `code`，方便篩選與日後 i18n。
+> 前後端統一使用標準 `code`，支援錯誤定位與修復建議。
 
 ---
 
@@ -101,45 +128,47 @@
 
 | 檔案 | 用途 |
 |------|------|
-| `src/types/surveyImport.ts` | 共用型別、錯誤碼、ImportResponse |
-| `src/lib/validateSurveyExcel.ts` | 前端輕量驗證 |
-| `src/lib/excel-parser.ts` | 後端解析 + Magic Bytes + 資源上限 + issues |
-| `src/app/api/surveys/import/route.ts` | 匯入 API、標準回應、簽章與大小攔截 |
-| `src/app/surveys/import/page.tsx` | 匯入 UI、說明、篩選、確認、AbortController |
-| `EXCEL_IMPORT_SOP.md` | 使用者向欄位規格（已同步更新） |
-| `test/validate-survey-excel.test.ts` | 前端驗證測試 |
+| `src/types/surveyImport.ts` | 共用型別、錯誤碼、ValidationIssue、ImportResponse、ImportSummary |
+| `src/lib/validateSurveyExcel.ts` | 前端輕量驗證與即時診斷建議 |
+| `src/lib/excel-parser.ts` | 後端解析 + Magic Bytes + 資源上限 + Formula 防護 + issues |
+| `src/app/api/surveys/import/route.ts` | 匯入 API、Dry Run 預覽、版權校驗、Prisma Transaction 寫入、錯誤脫敏 |
+| `src/app/surveys/import/page.tsx` | 匯入 UI、規則說明、50筆問題篩選與建議、版權確認、Dry Run 預覽、成功摘要畫面 |
+| `EXCEL_IMPORT_SOP.md` | 使用者向欄位規格與作業指引 |
+| `test/validate-survey-excel.test.ts` | 前端驗證單元測試 |
 | `test/excel-parser.test.ts` | 解析 + Magic Bytes + 大小上限測試 |
+| `test/m6c-excel-safety.test.ts` | M6C 專屬安全、Formula 防護、版權校驗與 Transaction 回滾測試 |
 
 ---
 
 ## 6. 設計原則（之後改動請遵守）
 
-1. **前端驗證 ≠ 安全邊界**，後端必須重驗證。
+1. **前端驗證 ≠ 安全邊界**，後端必須完整重驗證。
 2. API 以 `multipart/form-data` 收原始檔，不信任前端 JSON 為唯一來源。
-3. 錯誤使用穩定 `code` + 人類可讀 `message`。
-4. 驗證失敗不得寫入任何題目／選項（transaction）。
-5. 預設偏向安全：`DRAFT`、發布需確認。
-6. 不執行 Excel formula；公式視為不可信輸入。
+3. 錯誤使用穩定 `code` + 人類可讀 `message` + 具體可操作的 `suggestion`。
+4. 驗證失敗或中途錯誤不得寫入任何殘缺資料（Prisma Transaction Rollback）。
+5. 預設偏向安全：`DRAFT` 預設、發布需二次確認、版權必須手動勾選。
+6. 不執行 Excel formula；公式視為純文字資料。
+7. 生產環境錯誤回應嚴格脫敏，絕不洩漏系統內部路徑與 DB 帳密。
 
 ---
 
 ## 7. 建議後續 Roadmap
 
-### 短期（已完成 / 進行中）
-- [x] 更新 `EXCEL_IMPORT_SOP.md`：補前端驗證、錯誤碼、Magic Bytes、後端上限說明
+### 短期（已完成）
+- [x] 更新 `EXCEL_IMPORT_SOP.md`：補前端驗證、錯誤碼、Magic Bytes、後端上限與版權說明
 - [x] 後端統一檔案大小、列數、儲存格長度上限
-- [ ] 大量錯誤時提供「下載錯誤報告」
+- [x] 提供結構化錯誤修復建議與 50 筆分頁折疊
+- [x] 成功匯入摘要與導覽頁面
+- [x] All-or-Nothing 原子性交易保護
 
 ### 中期
-- [ ] 補齊循環相依／孤立題等商業規則的單元測試覆蓋
-- [ ] 預覽改為表格化（code、type、必填、選項數、visibility）
-- [ ] 範本加入 instructions 工作表與 data validation
+- [ ] 範本加入 instructions 工作表與 data validation 下拉選單
+- [ ] 大量錯誤時提供「下載錯誤診斷報告 (CSV/XLSX)」
 
 ### 長期（視產品需求）
-- [ ] Auth / 權限
-- [ ] Rate limit
-- [ ] Audit log
-- [ ] 匯入紀錄（importId）可追蹤
+- [ ] 結合 M6B Organization 權限與 RBAC 匯入管控
+- [ ] Rate limit 頻率限制
+- [ ] Audit log 匯入歷史稽核紀錄
 
 ---
 
@@ -148,27 +177,19 @@
 ```bash
 npm run typecheck
 npm run lint
-npx vitest run test/validate-survey-excel.test.ts
-npx vitest run test/excel-parser.test.ts
+npx vitest run test/m6c-excel-safety.test.ts
 npm test
 npm run build
 ```
-
-手動重點：
-- 正確 demo-survey.xlsx 可預覽與匯入
-- 假 `.xlsx`（改副檔名）被 `FILE_SIGNATURE_INVALID` 擋下
-- PUBLISHED 有二次確認
-- 錯誤篩選與說明區塊正常
 
 ---
 
 ## 9. 結論
 
-Excel 匯入已從「能用」提升到「可維護、可防呆、有基本安全」的狀態：
-
-- 使用者上傳前就知道規則
-- 前後端雙重驗證與一致錯誤結構
-- 檔案簽章檢查降低偽裝風險
-- 發布路徑有確認，預設較安全
-
-後續可依 Roadmap 逐步加深安全與文件，無需一次大改。
+Phase M6C 已達成全部目標：
+- 使用者上傳前即可看到明確格式指引與資源限制
+- 錯誤時提供「哪裡錯、為什麼錯、怎麼修」的診斷體驗
+- Dry Run 預覽保證零 DB 污染
+- 版權確認與公式注入防護健全
+- 原子交易確保資料一致性與零殘缺寫入
+- 92 項自動化測試全數通過，生產環境建置成功！

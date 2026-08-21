@@ -147,21 +147,55 @@ export async function POST(req: NextRequest) {
     }
 
     const totalChoices = questions.reduce((acc, q) => acc + (q.choices?.length || 0), 0);
+    const requiredQuestions = questions.filter((q) => q.required).length;
+    const scoredQuestions = questions.filter((q) => q.scoringEnabled).length;
+    const conditionalQuestions = questions.filter((q) => !!q.visibilityRules).length;
+    const importId = `IMP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
     if (mode === "preview") {
       return NextResponse.json({
         success: true,
         mode: "preview",
+        importId,
         questionCount: questions.length,
         questions,
         summary: {
           questions: questions.length,
           choices: totalChoices,
+          requiredQuestions,
+          scoredQuestions,
+          conditionalQuestions,
+          sheets: 2,
           warnings: warningIssues.length,
         },
         errors: [],
         warnings: warningIssues,
-      });
+      } satisfies ImportResponse);
+    }
+
+    // ===== P0-I: 版權 / 使用者內容確認檢查 =====
+    const copyrightConfirmed =
+      formData.get("copyrightConfirmed") === "true" ||
+      formData.get("copyrightConfirmed") === "1";
+
+    if (mode === "save" && !copyrightConfirmed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "請先確認您具有匯入內容的合法使用權利",
+          errors: [
+            {
+              code: "COPYRIGHT_NOT_CONFIRMED",
+              severity: "error",
+              sheet: "system",
+              message: "未確認使用者內容與版權宣告",
+              suggestion: "請在確認匯入前勾選「我確認我有權使用並匯入上述內容」聲明方塊。",
+            },
+          ],
+          warnings: [],
+        } satisfies ImportResponse,
+        { status: 400 }
+      );
     }
 
     let version = 1;
@@ -174,76 +208,101 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const survey = await db.survey.create({
-      data: {
-        organizationId,
-        title,
-        description,
-        status,
-        version,
-        parentSurveyId,
-        questions: {
-          create: questions.map((q) => ({
-            orderNum: q.orderNum,
-            code: q.code,
-            title: q.title,
-            description: q.description,
-            questionType: q.questionType as QuestionType,
-            required: q.required,
-            scoringEnabled: q.scoringEnabled,
-            reverseScore: q.reverseScore,
-            visibilityRules: q.visibilityRules
-              ? typeof q.visibilityRules === "string"
-                ? q.visibilityRules
-                : JSON.stringify(q.visibilityRules)
-              : null,
-            visibilityHint: q.visibilityHint || null,
-            minSelections: q.minSelections,
-            maxSelections: q.maxSelections,
-            minValue: q.minValue,
-            maxValue: q.maxValue,
-            choices: {
-              create: q.choices.map((c) => ({
-                orderNum: c.orderNum,
-                label: c.label,
-                value: c.value,
-                scoreEnabled: c.scoreEnabled,
-                score: c.score,
-                isOther: c.isOther,
-                requiresText: c.requiresText,
-                isNoneOfAbove: c.isNoneOfAbove,
-              })),
-            },
-          })),
-        },
-      },
-      include: {
-        questions: {
-          include: {
-            choices: true,
+    // ===== P0-F: All-or-Nothing Import / Atomic Transaction =====
+    const survey = await db.$transaction(async (tx) => {
+      return await tx.survey.create({
+        data: {
+          organizationId,
+          title,
+          description,
+          status,
+          version,
+          parentSurveyId,
+          questions: {
+            create: questions.map((q) => ({
+              orderNum: q.orderNum,
+              code: q.code,
+              title: q.title,
+              description: q.description,
+              questionType: q.questionType as QuestionType,
+              required: q.required,
+              scoringEnabled: q.scoringEnabled,
+              reverseScore: q.reverseScore,
+              visibilityRules: q.visibilityRules
+                ? typeof q.visibilityRules === "string"
+                  ? q.visibilityRules
+                  : JSON.stringify(q.visibilityRules)
+                : null,
+              visibilityHint: q.visibilityHint || null,
+              minSelections: q.minSelections,
+              maxSelections: q.maxSelections,
+              minValue: q.minValue,
+              maxValue: q.maxValue,
+              choices: {
+                create: q.choices.map((c) => ({
+                  orderNum: c.orderNum,
+                  label: c.label,
+                  value: c.value,
+                  scoreEnabled: c.scoreEnabled,
+                  score: c.score,
+                  isOther: c.isOther,
+                  requiresText: c.requiresText,
+                  isNoneOfAbove: c.isNoneOfAbove,
+                })),
+              },
+            })),
           },
         },
-      },
+        include: {
+          questions: {
+            include: {
+              choices: true,
+            },
+          },
+        },
+      });
     });
 
     return NextResponse.json({
       success: true,
       mode: "save",
       surveyId: survey.id,
+      importId,
       version: survey.version,
       survey,
       summary: {
         questions: questions.length,
         choices: totalChoices,
+        requiredQuestions,
+        scoredQuestions,
+        conditionalQuestions,
+        sheets: 2,
         warnings: warningIssues.length,
       },
       errors: [],
       warnings: warningIssues,
-    });
-  } catch (error: any) {
-    console.error("Error in survey import:", error);
+    } satisfies ImportResponse);
+  } catch (err: any) {
+    const errorId = `IMP-ERR-${Date.now().toString(36).toUpperCase()}`;
+    console.error(`[Excel Import API Error] ID: ${errorId}`, err);
+
+    // P0-K / P0-L: 生產環境不洩漏伺服器檔案路徑、DB 連線字串或 Prisma 內部 stack trace
     return NextResponse.json(
-      { error: "匯入處理失敗", details: error.message },
+      {
+        success: false,
+        error: `系統暫時無法完成匯入。如果問題持續發生，請聯絡系統管理員並提供代碼：${errorId}`,
+        importId: errorId,
+        errors: [
+          {
+            code: "DATABASE_IMPORT_FAILED",
+            severity: "error",
+            sheet: "system",
+            message: `資料庫寫入或伺服器處理失敗 (${errorId})`,
+            suggestion: "請檢查資料庫狀態或稍後重試，若持續失敗請提供代碼聯絡技術支援。",
+          },
+        ],
+        warnings: [],
+      } satisfies ImportResponse,
       { status: 500 }
     );
   }

@@ -23,31 +23,48 @@ export type ValidationSheet = 'questions' | 'choices' | 'system';
 export type ValidationErrorCode =
   // 檔案層級
   | 'FILE_EXTENSION_INVALID'
+  | 'INVALID_FILE_TYPE'
   | 'FILE_SIGNATURE_INVALID'      // magic bytes 不符
   | 'FILE_TOO_LARGE'
   | 'FILE_MIME_INVALID'
   | 'FILE_PARSE_FAILED'
+  | 'INVALID_FILE'
   | 'ROW_LIMIT_EXCEEDED'          // 列數超過上限
   | 'SHEET_LIMIT_EXCEEDED'        // 工作表數量超過上限
   | 'CELL_TOO_LONG'               // 儲存格文字過長
+  | 'FORMULA_NOT_ALLOWED'         // 偵測到未允許或潛在惡意公式
+  | 'COPYRIGHT_NOT_CONFIRMED'     // 未確認版權宣告
   // 工作表 / 結構
   | 'SHEET_MISSING'
+  | 'MISSING_SHEET'
   | 'HEADER_INVALID'
+  | 'INVALID_HEADER'
   | 'HEADER_MISSING_REQUIRED'
+  | 'MISSING_HEADER'
   | 'EXTRA_COLUMN'                // 多餘欄位（可 warning）
   // 資料列
   | 'REQUIRED_FIELD_EMPTY'
+  | 'EMPTY_REQUIRED_FIELD'
   | 'INVALID_QUESTION_TYPE'
   | 'INVALID_BOOLEAN'
   | 'INVALID_NUMBER'
+  | 'INVALID_VALUE'
   | 'DUPLICATE_QUESTION_CODE'
+  | 'DUPLICATE_ID'
   | 'DUPLICATE_CHOICE_VALUE'
+  | 'DUPLICATE_CHOICE_ID'
   | 'DUPLICATE_CHOICE_LABEL'
-  // 關聯
+  // 關聯與條件
   | 'QUESTION_NOT_FOUND'          // choices.question_code 不存在
+  | 'REFERENCE_NOT_FOUND'
   | 'INVALID_VISIBILITY_RULE'
+  | 'INVALID_REFERENCE'
+  | 'INVALID_BRANCH'
+  | 'BRANCH_TARGET_NOT_FOUND'
   | 'BRANCHING_CYCLE'
+  | 'BRANCH_CYCLE_DETECTED'
   | 'ORPHAN_QUESTION'
+  | 'ORPHAN_CHOICE'
   // 商業規則
   | 'CHOICE_REQUIRED_FOR_TYPE'    // 選擇題沒有選項
   | 'UNEXPECTED_CHOICES'          // text/number/info 不應有選項
@@ -77,6 +94,8 @@ export interface ValidationIssue {
   value?: string;
   /** 人類可讀訊息 */
   message: string;
+  /** 修正建議（Actionable suggestion） */
+  suggestion?: string;
 }
 
 // ============================================================
@@ -86,6 +105,10 @@ export interface ValidationIssue {
 export interface ImportSummary {
   questions: number;
   choices: number;
+  requiredQuestions?: number;
+  scoredQuestions?: number;
+  conditionalQuestions?: number;
+  sheets?: number;
   warnings: number;
 }
 
@@ -93,14 +116,19 @@ export interface ImportResponse {
   success: boolean;
   /** 錯誤提示訊息（相容舊版） */
   error?: string;
+  /** 執行模式 */
+  mode?: ImportMode | string;
   /** 成功時回傳建立的 surveyId（或 importId） */
   surveyId?: string;
   importId?: string;
+  version?: number;
+  survey?: any;
+  questionCount?: number;
   summary?: ImportSummary;
   errors: ValidationIssue[];
   warnings: ValidationIssue[];
   /** 預覽模式時可回傳解析後的題目（可選） */
-  questions?: any[]; // 後續 Phase 再收斂成 QuestionInput[]
+  questions?: any[]; // QuestionInput[]
 }
 
 // ============================================================

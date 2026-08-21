@@ -80,6 +80,7 @@ export async function validateSurveyExcel(
       severity: 'error',
       sheet: 'system',
       message: `僅支援 ${ALLOWED_EXTENSIONS.join(', ')} 格式的 Excel 檔案`,
+      suggestion: '請確認檔案副檔名為 .xlsx，若是 .csv 或 .xls 請先另存為標準 .xlsx 格式。',
     });
     return buildResult(errors, warnings);
   }
@@ -90,6 +91,7 @@ export async function validateSurveyExcel(
       severity: 'error',
       sheet: 'system',
       message: `檔案大小不可超過 ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+      suggestion: '請精簡檔案內容、移除多餘工作表或過大圖片，確保檔案小於 5MB。',
     });
     return buildResult(errors, warnings);
   }
@@ -108,6 +110,7 @@ export async function validateSurveyExcel(
       severity: 'error',
       sheet: 'system',
       message: `Excel 檔案解析失敗：${err?.message || '檔案可能損毀或非標準 XLSX 格式'}`,
+      suggestion: '請使用 Microsoft Excel 或 Google Sheets 重新匯出標準 .xlsx 活頁簿後再上傳。',
     });
     return buildResult(errors, warnings);
   }
@@ -129,6 +132,7 @@ export async function validateSurveyExcel(
       severity: 'error',
       sheet: 'system',
       message: '缺少名為 "questions" 的工作表',
+      suggestion: '請將儲存題目設定的工作表名稱命名為「questions」（英文小寫）。',
     });
   }
 
@@ -139,6 +143,7 @@ export async function validateSurveyExcel(
       severity: 'warning',
       sheet: 'system',
       message: '未找到 "choices" 工作表（若問卷包含選擇題，將導致選項缺失）',
+      suggestion: '若問卷包含單選題 (single_choice) 或複選題 (multiple_choice)，請新增「choices」工作表並填寫選項。',
     });
   }
 
@@ -166,6 +171,7 @@ export async function validateSurveyExcel(
         column: required,
         field: required,
         message: `questions 工作表缺少必要欄位「${required}」`,
+        suggestion: `請在 questions 工作表第 1 列新增標頭「${required}」。`,
       });
     }
   }
@@ -205,6 +211,7 @@ export async function validateSurveyExcel(
         column: 'code',
         field: 'code',
         message: `第 ${rowNumber} 列：題目代碼（code）不可為空`,
+        suggestion: '請在 code 欄位填寫唯一的英數代碼（例如 Q1, Q2）。',
       });
       return;
     }
@@ -220,6 +227,7 @@ export async function validateSurveyExcel(
         field: 'code',
         value: safeDisplayValue(code),
         message: `第 ${rowNumber} 列：重複的題目代碼「${code}」`,
+        suggestion: `題目代碼必須在全問卷唯一，請修改「${code}」為其他不重複的代碼。`,
       });
     } else {
       questionCodeSet.add(code);
@@ -236,6 +244,7 @@ export async function validateSurveyExcel(
         field: 'title',
         value: safeDisplayValue(code),
         message: `第 ${rowNumber} 列 [${code}]：題目標題（title）不可為空`,
+        suggestion: '請在 title 欄位填寫該題目的問題說明文字。',
       });
     }
 
@@ -250,6 +259,7 @@ export async function validateSurveyExcel(
         field: 'question_type',
         value: safeDisplayValue(code),
         message: `第 ${rowNumber} 列 [${code}]：題型（question_type）不可為空`,
+        suggestion: '請填寫題型，可使用：single_choice, multiple_choice, text, number, yes_no, info。',
       });
     }
   });
@@ -260,6 +270,7 @@ export async function validateSurveyExcel(
       severity: 'error',
       sheet: 'questions',
       message: 'questions 工作表中沒有有效的資料列',
+      suggestion: '請在 questions 工作表填寫至少一題問卷題目。',
     });
   }
 
@@ -286,6 +297,7 @@ export async function validateSurveyExcel(
           column: required,
           field: required,
           message: `choices 工作表缺少欄位「${required}」`,
+          suggestion: `建議在 choices 工作表第 1 列加入「${required}」標頭。`,
         });
       }
     }
@@ -320,6 +332,7 @@ export async function validateSurveyExcel(
           column: 'question_code',
           field: 'question_code',
           message: `第 ${rowNumber} 列：選項所屬題目代碼（question_code）不可為空`,
+          suggestion: '請在 question_code 欄位填寫所屬題目的 code（例如 Q1）。',
         });
         return;
       }
@@ -335,6 +348,7 @@ export async function validateSurveyExcel(
           field: 'question_code',
           value: safeDisplayValue(qCode),
           message: `第 ${rowNumber} 列：選項參照的題目代碼「${qCode}」不存在於 questions 工作表`,
+          suggestion: `請確認 questions 工作表中是否定義了 code 為「${qCode}」的題目，或修正此選項的 question_code。`,
         });
       }
 
@@ -347,6 +361,7 @@ export async function validateSurveyExcel(
           column: 'label',
           field: 'label',
           message: `第 ${rowNumber} 列 [${qCode}]：選項標籤（label）與代碼（value）不可同時為空`,
+          suggestion: '請填寫選項的顯示名稱 (label) 與選項代碼 (value)。',
         });
       }
 
@@ -362,6 +377,7 @@ export async function validateSurveyExcel(
           field: 'value',
           value: safeDisplayValue(value || label),
           message: `第 ${rowNumber} 列 [${qCode}]：題目內有重複的選項值/標籤「${value || label}」`,
+          suggestion: '建議同一題內的各選項代碼 (value) 與標籤 (label) 保持唯一以利統計。',
         });
       } else {
         choiceValSet.add(choiceKey);

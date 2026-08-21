@@ -22,11 +22,20 @@ function parseNumber(val: any): number | null {
 function getCellValue(cell: ExcelJS.Cell): any {
   const val = cell.value;
   if (val === null || val === undefined) return null;
-  if (typeof val === "object" && "text" in val) {
-    return (val as any).text;
-  }
-  if (typeof val === "object" && "result" in val) {
-    return (val as any).result;
+  if (typeof val === "object") {
+    if ("text" in val) {
+      return (val as any).text;
+    }
+    if ("result" in val) {
+      return (val as any).result;
+    }
+    if ("formula" in val) {
+      // 將公式視為純文字或提取計算結果，禁止作為執行代碼
+      return (val as any).result !== undefined ? (val as any).result : (val as any).formula;
+    }
+    if ("richText" in val && Array.isArray((val as any).richText)) {
+      return (val as any).richText.map((r: any) => r.text).join("");
+    }
   }
   return val;
 }
@@ -100,6 +109,7 @@ export async function parseSurveyExcel(
       severity: "error",
       sheet: "system",
       message: msg,
+      suggestion: "請精簡檔案內容、移除多餘工作表或過大圖片，確保檔案小於 5MB。",
     });
     return { questions: [], errors, issues };
   }
@@ -118,6 +128,7 @@ export async function parseSurveyExcel(
       severity: "error",
       sheet: "system",
       message: msg,
+      suggestion: "請使用 Microsoft Excel 或 Google Sheets 重新匯出標準 .xlsx 活頁簿後再上傳。",
     });
     return {
       questions: [],
@@ -134,6 +145,7 @@ export async function parseSurveyExcel(
       severity: "error",
       sheet: "system",
       message: msg,
+      suggestion: "請將非必要工作表刪除，使活頁簿的工作表總數在 20 個以內。",
     });
     return { questions: [], errors, issues };
   }
@@ -151,6 +163,7 @@ export async function parseSurveyExcel(
       severity: "error",
       sheet: "system",
       message: msg,
+      suggestion: "請將包含題目資料的工作表名稱命名為「questions」（英文小寫）。",
     });
     return { questions: [], errors, issues };
   }
@@ -164,6 +177,7 @@ export async function parseSurveyExcel(
       severity: "error",
       sheet: "questions",
       message: msg,
+      suggestion: "請將題數控制在 500 列以內（含標頭），超長問卷請拆分或分批匯入。",
     });
     return { questions: [], errors, issues };
   }
@@ -178,6 +192,7 @@ export async function parseSurveyExcel(
         severity: "error",
         sheet: "choices",
         message: msg,
+        suggestion: "請將選項列數控制在 5000 列以內（含標頭）。",
       });
       return { questions: [], errors, issues };
     }
@@ -216,6 +231,7 @@ export async function parseSurveyExcel(
         column: "code",
         field: "code",
         message: msg,
+        suggestion: "請在 code 欄位填寫唯一的英數代碼（例如 Q1, Q2）。",
       });
       return;
     }
@@ -231,6 +247,7 @@ export async function parseSurveyExcel(
         field: "title",
         value: code,
         message: msg,
+        suggestion: "請在 title 欄位填寫該題目的問題說明文字。",
       });
       return;
     }
@@ -246,6 +263,7 @@ export async function parseSurveyExcel(
         column: "title",
         field: "title",
         message: msg,
+        suggestion: "請精簡題目標題文字至 5000 字以內。",
       });
       return;
     }
@@ -263,6 +281,7 @@ export async function parseSurveyExcel(
         column: "description",
         field: "description",
         message: msg,
+        suggestion: "請精簡題目說明文字至 5000 字以內。",
       });
       return;
     }
@@ -282,6 +301,7 @@ export async function parseSurveyExcel(
         field: "question_type",
         value: rawType,
         message: msg,
+        suggestion: "請使用支援的 6 種題型之一：single_choice, multiple_choice, text, number, yes_no, info。",
       });
       return;
     }
@@ -357,6 +377,7 @@ export async function parseSurveyExcel(
           column: "question_code",
           field: "question_code",
           message: msg,
+          suggestion: "請在 question_code 欄位填寫所屬題目的 code（例如 Q1）。",
         });
         return;
       }
@@ -374,6 +395,7 @@ export async function parseSurveyExcel(
           field: "question_code",
           value: qCode,
           message: msg,
+          suggestion: `請確認 questions 工作表中已定義代碼為「${qCode}」的題目。`,
         });
         return;
       }
@@ -389,6 +411,7 @@ export async function parseSurveyExcel(
           column: !label ? "label" : "value",
           field: !label ? "label" : "value",
           message: msg,
+          suggestion: "請填寫選項的顯示名稱 (label) 與儲存值代碼 (value)。",
         });
         return;
       }
@@ -404,6 +427,7 @@ export async function parseSurveyExcel(
           column: "label",
           field: "label",
           message: msg,
+          suggestion: "請精簡選項標籤文字至 5000 字以內。",
         });
         return;
       }
