@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, unauthorizedResponse } from "@/lib/auth";
+import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
@@ -24,6 +24,20 @@ export async function GET(
 
     if (!survey) {
       return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const isManagementView = searchParams.get("mode") === "management";
+    const auth = await getCurrentUser(req);
+
+    if (isManagementView) {
+      if (!auth) {
+        return unauthorizedResponse();
+      }
+      const isMember = await isUserInOrganization(auth.user.id, survey.organizationId);
+      if (!isMember) {
+        return forbiddenResponse("您無權查看此組織的問卷管理詳情");
+      }
     }
 
     return NextResponse.json({ survey });
@@ -59,6 +73,11 @@ export async function PATCH(
 
     if (!existingSurvey) {
       return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
+    }
+
+    const isMember = await isUserInOrganization(auth.user.id, existingSurvey.organizationId);
+    if (!isMember) {
+      return forbiddenResponse("您無權修改此組織的問卷");
     }
 
     // 若問卷已發布 (PUBLISHED)，禁止直接修改會影響歷史結果之題目、計分與條件規則

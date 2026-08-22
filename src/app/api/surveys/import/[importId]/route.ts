@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getCurrentUser, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
@@ -34,6 +35,14 @@ export async function GET(
         },
         { status: 404 }
       );
+    }
+
+    const auth = await getCurrentUser(req);
+    if (auth) {
+      const isMember = await isUserInOrganization(auth.user.id, record.organizationId);
+      if (!isMember) {
+        return forbiddenResponse("您無權查看此組織的匯入紀錄");
+      }
     }
 
     return NextResponse.json({

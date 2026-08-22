@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ResponseStatus } from "@prisma/client";
-import { getCurrentUser, unauthorizedResponse } from "@/lib/auth";
+import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
@@ -41,6 +41,11 @@ export async function GET(
 
     if (!survey) {
       return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
+    }
+
+    const isMember = await isUserInOrganization(auth.user.id, survey.organizationId);
+    if (!isMember) {
+      return forbiddenResponse("您無權查看此組織問卷的統計報表");
     }
 
     const totalResponses = survey.responses.length;

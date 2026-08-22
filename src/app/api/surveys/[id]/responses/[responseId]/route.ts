@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ResponseStatus } from "@prisma/client";
+import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
@@ -11,6 +12,7 @@ export async function GET(
     const response = await db.response.findUnique({
       where: { id: responseId },
       include: {
+        survey: true,
         answers: {
           include: {
             question: true,
@@ -21,6 +23,18 @@ export async function GET(
 
     if (!response || response.surveyId !== id) {
       return NextResponse.json({ error: "找不到該作答記錄" }, { status: 404 });
+    }
+
+    // 正式填答紀錄（COMPLETED）屬於管理端敏感資料，必須驗證登入與組織權限
+    if (response.status === ResponseStatus.COMPLETED) {
+      const auth = await getCurrentUser(req);
+      if (!auth) {
+        return unauthorizedResponse();
+      }
+      const isMember = await isUserInOrganization(auth.user.id, response.survey.organizationId);
+      if (!isMember) {
+        return forbiddenResponse("您無權查看此組織的作答明細");
+      }
     }
 
     const formattedAnswers = response.answers.map((a) => {
@@ -69,6 +83,7 @@ export async function DELETE(
 
     const response = await db.response.findUnique({
       where: { id: responseId },
+      include: { survey: true },
     });
 
     if (!response || response.surveyId !== id) {
@@ -76,11 +91,22 @@ export async function DELETE(
     }
 
     // 正式回覆保護邏輯
-    if (response.status === ResponseStatus.COMPLETED && !force) {
-      return NextResponse.json(
-        { error: "已完成的正式回覆不可直接刪除，避免誤刪正式資料。" },
-        { status: 400 }
-      );
+    if (response.status === ResponseStatus.COMPLETED) {
+      const auth = await getCurrentUser(req);
+      if (!auth) {
+        return unauthorizedResponse();
+      }
+      const isMember = await isUserInOrganization(auth.user.id, response.survey.organizationId);
+      if (!isMember) {
+        return forbiddenResponse("您無權刪除此組織的回覆記錄");
+      }
+
+      if (!force) {
+        return NextResponse.json(
+          { error: "已完成的正式回覆不可直接刪除，避免誤刪正式資料。" },
+          { status: 400 }
+        );
+      }
     }
 
     await db.response.delete({

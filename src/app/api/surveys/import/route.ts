@@ -4,6 +4,7 @@ import { validateQuestionsStructure } from "@/lib/survey-engine";
 import { db } from "@/lib/db";
 import { ImportStatus, QuestionType, SurveyStatus } from "@prisma/client";
 import { ImportResponse, ValidationIssue } from "@/types/surveyImport";
+import { getCurrentUser, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
 
 function generateImportId(): string {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -78,6 +79,14 @@ export async function POST(req: NextRequest) {
       },
     });
     let organizationId = requestedOrgId || defaultOrg.id;
+
+    const auth = await getCurrentUser(req);
+    if (auth && mode === "save") {
+      const isMember = await isUserInOrganization(auth.user.id, organizationId);
+      if (!isMember) {
+        return forbiddenResponse("您無權匯入問卷至該組織");
+      }
+    }
 
     if (!file) {
       const issue: ValidationIssue = {
@@ -369,6 +378,7 @@ export async function POST(req: NextRequest) {
       const createdSurvey = await tx.survey.create({
         data: {
           organizationId,
+          createdById: auth?.user.id || null,
           title,
           description,
           status,
@@ -424,6 +434,7 @@ export async function POST(req: NextRequest) {
           importId,
           surveyId: createdSurvey.id,
           organizationId,
+          createdById: auth?.user.id || null,
           fileName: file.name,
           fileSize: file.size,
           mode: "save",

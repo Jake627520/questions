@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ValidationIssue } from "@/types/surveyImport";
+import { getCurrentUser, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
 
 function escapeCsvField(field: unknown): string {
   if (field === null || field === undefined) return '""';
@@ -29,6 +30,14 @@ export async function GET(
         },
         { status: 404 }
       );
+    }
+
+    const auth = await getCurrentUser(req);
+    if (auth) {
+      const isMember = await isUserInOrganization(auth.user.id, record.organizationId);
+      if (!isMember) {
+        return forbiddenResponse("您無權下載此組織的錯誤報告");
+      }
     }
 
     let issues: ValidationIssue[] = [];

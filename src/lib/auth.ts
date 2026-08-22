@@ -232,3 +232,51 @@ export function getSessionCookieOptions(expiresAt?: Date) {
     expires: expiresAt || new Date(Date.now() + DEFAULT_SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000),
   };
 }
+
+// =========================================================================
+// 4. Tenant / Organization Isolation Helpers
+// =========================================================================
+
+/**
+ * 取得使用者的所有組織 ID 清單
+ */
+export async function getUserOrganizationIds(userId: string): Promise<string[]> {
+  const memberships = await db.membership.findMany({
+    where: { userId },
+    select: { organizationId: true },
+  });
+  return memberships.map((m) => m.organizationId);
+}
+
+/**
+ * 檢查使用者是否為指定組織的成員
+ */
+export async function isUserInOrganization(userId: string, organizationId: string): Promise<boolean> {
+  if (!userId || !organizationId) return false;
+  const membership = await db.membership.findUnique({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+  });
+  return !!membership;
+}
+
+/**
+ * 統一產生 403 Forbidden 回應（跨租戶存取阻擋）
+ */
+export function forbiddenResponse(
+  message = "無權存取該組織的資源",
+  code = "FORBIDDEN"
+): NextResponse {
+  return NextResponse.json(
+    {
+      error: code,
+      message,
+    },
+    { status: 403 }
+  );
+}
+

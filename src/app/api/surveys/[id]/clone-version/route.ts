@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { SurveyStatus } from "@prisma/client";
-import { getCurrentUser, unauthorizedResponse } from "@/lib/auth";
+import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
 
 export async function POST(
   req: NextRequest,
@@ -30,6 +30,11 @@ export async function POST(
 
     if (!sourceSurvey) {
       return NextResponse.json({ error: "找不到來源問卷" }, { status: 404 });
+    }
+
+    const isMember = await isUserInOrganization(auth.user.id, sourceSurvey.organizationId);
+    if (!isMember) {
+      return forbiddenResponse("您無權複製此組織的問卷版本");
     }
 
     const nextVersion = sourceSurvey.version + 1;
