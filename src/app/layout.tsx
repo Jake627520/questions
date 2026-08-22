@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
-import { FileSpreadsheet, LayoutGrid, PlusCircle } from "lucide-react";
+import { FileSpreadsheet, LayoutGrid, Settings, PlusCircle } from "lucide-react";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 
 export const metadata: Metadata = {
   title: "問卷系統 MVP (Survey System)",
@@ -17,31 +18,44 @@ export default function RootLayout({
     <html lang="zh-TW">
       <body className="antialiased text-slate-900 bg-slate-50 flex flex-col min-h-screen">
         <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200 shadow-sm">
-          <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2 text-blue-600 font-bold text-xl tracking-tight">
-              <span className="p-2 bg-blue-50 text-blue-600 rounded-lg">📋</span>
-              <span>問卷系統 MVP</span>
-            </Link>
-            <nav className="flex items-center gap-3">
+          <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Link href="/" className="flex items-center gap-2 text-blue-600 font-bold text-xl tracking-tight shrink-0">
+                <span className="p-2 bg-blue-50 text-blue-600 rounded-lg">📋</span>
+                <span className="hidden sm:inline">問卷系統 MVP</span>
+              </Link>
+              <WorkspaceSwitcher />
+            </div>
+
+            <nav className="flex items-center gap-2 sm:gap-3">
               <Link
                 href="/"
-                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition"
               >
                 <LayoutGrid className="w-4 h-4" />
                 <span>問卷列表</span>
               </Link>
               <Link
                 href="/surveys/import"
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition"
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                <span>Excel 匯入題庫</span>
+                <span className="hidden sm:inline">Excel 匯入題庫</span>
+                <span className="sm:hidden">匯入</span>
+              </Link>
+              <Link
+                href="/settings/organization"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition"
+                title="組織與成員設定"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="hidden md:inline">組織設定</span>
               </Link>
               <Link
                 href="/account"
-                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition border border-slate-200"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition border border-slate-200"
               >
-                <span>帳號管理</span>
+                <span>帳號</span>
               </Link>
             </nav>
           </div>

@@ -35,7 +35,21 @@ export default function HomePage() {
   const fetchSurveys = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/surveys");
+      // 先取得當前工作區
+      let orgQuery = "";
+      try {
+        const resOrg = await fetch("/api/organizations");
+        if (resOrg.ok) {
+          const dataOrg = await resOrg.json();
+          if (dataOrg.activeOrganization?.id) {
+            orgQuery = `?organizationId=${dataOrg.activeOrganization.id}`;
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      const res = await fetch(`/api/surveys${orgQuery}`);
       const data = await res.json();
       if (data.surveys) {
         setSurveys(data.surveys);

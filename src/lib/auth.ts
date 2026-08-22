@@ -2,9 +2,10 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { User, Session } from "@prisma/client";
+import { User, Session, Organization, Role } from "@prisma/client";
 
 export const SESSION_COOKIE_NAME = "survey_session";
+export const ACTIVE_ORG_COOKIE_NAME = "survey_active_org";
 export const DEFAULT_SESSION_DURATION_DAYS = 7;
 
 export interface AuthContext {
@@ -259,8 +260,6 @@ export function getSafeReturnUrl(returnTo: string | null | undefined, defaultUrl
 // 4. Tenant / Organization Isolation & RBAC Helpers
 // =========================================================================
 
-import { Role } from "@prisma/client";
-
 /**
  * 標準角色授權群組
  */
@@ -352,6 +351,96 @@ export function generatePublicToken(): string {
   return crypto.randomBytes(24).toString("base64url");
 }
 
+/**
+ * 取得 Active Organization Cookie 的標準設定選項
+ */
+export function getActiveOrgCookieOptions(expiresAt?: Date) {
+  return {
+    name: ACTIVE_ORG_COOKIE_NAME,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    expires: expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 天
+  };
+}
 
+/**
+ * 解析當前使用者的 Active Organization Context (僅作為 UI 顯示偏好提示)
+ *
+ * 安全原則：
+ * 1. 優先依據 survey_active_org Cookie 查詢使用者的真實 Membership。
+ * 2. 若 Cookie 缺失、被竄改或使用者已自該組織被移除 -> 自動安全回退至使用者第一個合法組織。
+ * 3. 若使用者未加入任何組織 -> 回傳 null。
+ * 4. 絕不將 Cookie 作為任何寫入/讀取授權之依據。
+ */
+export async function getActiveOrganizationContext(req?: NextRequest): Promise<{
+  organization: Organization;
+  membership: { id: string; role: Role; organizationId: string };
+} | null> {
+  const auth = await getCurrentUser(req);
+  if (!auth) return null;
 
+  let cookieOrgId: string | undefined;
 
+  // 1. 優先從 NextRequest cookies 讀取
+  if (req?.cookies) {
+    cookieOrgId = req.cookies.get(ACTIVE_ORG_COOKIE_NAME)?.value;
+  }
+
+  // 2. 嘗試從 Next.js headers cookies() 讀取
+  if (!cookieOrgId) {
+    try {
+      const cookieStore = cookies();
+      cookieOrgId = cookieStore.get(ACTIVE_ORG_COOKIE_NAME)?.value;
+    } catch {
+      // 測試環境或無上下文時忽略
+    }
+  }
+
+  // 3. 若 Cookie 存在，校驗使用者是否確實具備該組織的 Membership
+  if (cookieOrgId && typeof cookieOrgId === "string" && cookieOrgId.trim().length > 0) {
+    const membership = await db.membership.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: auth.user.id,
+          organizationId: cookieOrgId.trim(),
+        },
+      },
+      include: {
+        organization: true,
+      },
+    });
+
+    if (membership) {
+      return {
+        organization: membership.organization,
+        membership: {
+          id: membership.id,
+          role: membership.role,
+          organizationId: membership.organizationId,
+        },
+      };
+    }
+  }
+
+  // 4. Cookie 不存在或無效（被竄改、組織被刪除、Membership 被撤銷） -> 回退至第一筆合法 Membership
+  const fallbackMembership = await db.membership.findFirst({
+    where: { userId: auth.user.id },
+    include: { organization: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!fallbackMembership) {
+    return null;
+  }
+
+  return {
+    organization: fallbackMembership.organization,
+    membership: {
+      id: fallbackMembership.id,
+      role: fallbackMembership.role,
+      organizationId: fallbackMembership.organizationId,
+    },
+  };
+}

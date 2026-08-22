@@ -2,7 +2,13 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, unauthorizedResponse, getUserOrganizationIds, forbiddenResponse } from "@/lib/auth";
+import {
+  getCurrentUser,
+  unauthorizedResponse,
+  getUserOrganizationIds,
+  forbiddenResponse,
+  getActiveOrganizationContext,
+} from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
