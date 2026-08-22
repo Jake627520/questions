@@ -1,10 +1,16 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getCurrentUser, unauthorizedResponse } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const auth = await getCurrentUser(req);
+    if (!auth) {
+      return unauthorizedResponse();
+    }
+
     const surveys = await db.survey.findMany({
       orderBy: { createdAt: "desc" },
       include: {

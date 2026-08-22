@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getCurrentUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
@@ -43,6 +44,11 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await getCurrentUser(req);
+    if (!auth) {
+      return unauthorizedResponse();
+    }
+
     const { id } = params;
     const body = await req.json();
 

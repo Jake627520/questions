@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { SurveyStatus } from "@prisma/client";
+import { getCurrentUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await getCurrentUser(req);
+    if (!auth) {
+      return unauthorizedResponse();
+    }
+
     const { id } = params;
     const sourceSurvey = await db.survey.findUnique({
       where: { id },

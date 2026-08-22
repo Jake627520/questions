@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateSurveyExportExcel } from "@/lib/excel-parser";
 import { ResponseStatus } from "@prisma/client";
+import { getCurrentUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await getCurrentUser(req);
+    if (!auth) {
+      return unauthorizedResponse();
+    }
+
     const { id } = params;
     const survey = await db.survey.findUnique({
       where: { id },

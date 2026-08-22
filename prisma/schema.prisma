@@ -42,18 +42,34 @@ enum ImportStatus {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  avatarUrl String?  @map("avatar_url")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  avatarUrl    String?  @map("avatar_url")
+  passwordHash String?  @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   memberships    Membership[]
   createdSurveys Survey[]       @relation("SurveyCreator")
   surveyImports  SurveyImport[]
+  sessions       Session[]
 
   @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
 }
 
 model Organization {
