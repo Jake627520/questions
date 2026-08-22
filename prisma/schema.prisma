@@ -34,6 +34,13 @@ enum Role {
   VIEWER
 }
 
+enum ImportStatus {
+  PREVIEW
+  IMPORTING
+  SUCCESS
+  FAILED
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -43,7 +50,8 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   memberships    Membership[]
-  createdSurveys Survey[]     @relation("SurveyCreator")
+  createdSurveys Survey[]       @relation("SurveyCreator")
+  surveyImports  SurveyImport[]
 
   @@map("users")
 }
@@ -55,8 +63,9 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  memberships Membership[]
-  surveys     Survey[]
+  memberships   Membership[]
+  surveys       Survey[]
+  surveyImports SurveyImport[]
 
   @@map("organizations")
 }
@@ -92,15 +101,54 @@ model Survey {
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @updatedAt @map("updated_at")
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  createdBy      User?        @relation("SurveyCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  parentSurvey   Survey?      @relation("SurveyVersions", fields: [parentSurveyId], references: [id], onDelete: SetNull)
-  childVersions  Survey[]     @relation("SurveyVersions")
-  questions      Question[]
-  responses      Response[]
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy     User?          @relation("SurveyCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  parentSurvey  Survey?        @relation("SurveyVersions", fields: [parentSurveyId], references: [id], onDelete: SetNull)
+  childVersions Survey[]       @relation("SurveyVersions")
+  questions     Question[]
+  responses     Response[]
+  surveyImports SurveyImport[]
 
   @@index([organizationId])
   @@map("surveys")
+}
+
+model SurveyImport {
+  id             String  @id @default(cuid())
+  importId       String  @unique @map("import_id")
+  surveyId       String? @map("survey_id")
+  organizationId String  @map("organization_id")
+  createdById    String? @map("created_by_id")
+
+  fileName String?      @map("file_name")
+  fileSize Int?         @map("file_size")
+  mode     String       @default("save")
+  status   ImportStatus @default(IMPORTING)
+
+  questionCount    Int @default(0) @map("question_count")
+  choiceCount      Int @default(0) @map("choice_count")
+  requiredCount    Int @default(0) @map("required_count")
+  scoredCount      Int @default(0) @map("scored_count")
+  conditionalCount Int @default(0) @map("conditional_count")
+
+  copyrightConfirmed Boolean @default(false) @map("copyright_confirmed")
+
+  errorCode    String? @map("error_code")
+  errorMessage String? @map("error_message") @db.Text
+  errorDetails String? @map("error_details") @db.Text
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+
+  survey       Survey?      @relation(fields: [surveyId], references: [id], onDelete: SetNull)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([surveyId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("survey_imports")
 }
 
 model Question {
@@ -132,16 +180,16 @@ model Question {
 }
 
 model Choice {
-  id            String   @id @default(cuid())
-  questionId    String   @map("question_id")
-  orderNum      Int      @map("order_num")
+  id            String  @id @default(cuid())
+  questionId    String  @map("question_id")
+  orderNum      Int     @map("order_num")
   label         String
   value         String
-  scoreEnabled  Boolean  @default(false) @map("score_enabled")
+  scoreEnabled  Boolean @default(false) @map("score_enabled")
   score         Float?
-  isOther       Boolean  @default(false) @map("is_other")
-  requiresText  Boolean  @default(false) @map("requires_text")
-  isNoneOfAbove Boolean  @default(false) @map("is_none_of_above")
+  isOther       Boolean @default(false) @map("is_other")
+  requiresText  Boolean @default(false) @map("requires_text")
+  isNoneOfAbove Boolean @default(false) @map("is_none_of_above")
 
   question Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
   answers  AnswerChoice[]
@@ -169,11 +217,11 @@ model Response {
 }
 
 model Answer {
-  id         String   @id @default(cuid())
-  responseId String   @map("response_id")
-  questionId String   @map("question_id")
-  rawValue   String   @map("raw_value") @db.Text
-  otherText  String?  @map("other_text") @db.Text
+  id         String  @id @default(cuid())
+  responseId String  @map("response_id")
+  questionId String  @map("question_id")
+  rawValue   String  @map("raw_value") @db.Text
+  otherText  String? @map("other_text") @db.Text
   score      Float?
 
   response Response       @relation(fields: [responseId], references: [id], onDelete: Cascade)

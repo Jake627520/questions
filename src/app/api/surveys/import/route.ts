@@ -2,10 +2,61 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseSurveyExcel, hasValidXlsxSignature, MAX_FILE_SIZE } from "@/lib/excel-parser";
 import { validateQuestionsStructure } from "@/lib/survey-engine";
 import { db } from "@/lib/db";
-import { QuestionType, SurveyStatus } from "@prisma/client";
+import { ImportStatus, QuestionType, SurveyStatus } from "@prisma/client";
 import { ImportResponse, ValidationIssue } from "@/types/surveyImport";
 
+function generateImportId(): string {
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `IMP-${dateStr}-${randStr}`;
+}
+
+async function recordFailedImport(params: {
+  importId: string;
+  organizationId: string;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mode: string;
+  errorCode: string;
+  errorMessage: string;
+  errorDetails?: ValidationIssue[];
+  copyrightConfirmed?: boolean;
+}) {
+  try {
+    // 確保 default organization 存在
+    await db.organization.upsert({
+      where: { slug: "default" },
+      update: {},
+      create: {
+        id: "default-org-id",
+        name: "Default Workspace",
+        slug: "default",
+      },
+    });
+
+    await db.surveyImport.create({
+      data: {
+        importId: params.importId,
+        organizationId: params.organizationId,
+        fileName: params.fileName || "unknown.xlsx",
+        fileSize: params.fileSize || 0,
+        mode: params.mode,
+        status: ImportStatus.FAILED,
+        errorCode: params.errorCode,
+        errorMessage: params.errorMessage,
+        errorDetails: params.errorDetails ? JSON.stringify(params.errorDetails) : null,
+        copyrightConfirmed: params.copyrightConfirmed ?? false,
+        completedAt: new Date(),
+      },
+    });
+  } catch (auditErr) {
+    console.error("[SurveyImport Audit Failure Log Error]:", auditErr);
+  }
+}
+
 export async function POST(req: NextRequest) {
+  const importId = generateImportId();
+
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -14,20 +65,48 @@ export async function POST(req: NextRequest) {
     const description = (formData.get("description") as string) || "";
     const status = (formData.get("status") as SurveyStatus) || SurveyStatus.PUBLISHED;
     const parentSurveyId = (formData.get("parentSurveyId") as string) || null;
+    const requestedOrgId = (formData.get("organizationId") as string) || "default-org-id";
+
+    // 確保 default organization 存在
+    const defaultOrg = await db.organization.upsert({
+      where: { slug: "default" },
+      update: {},
+      create: {
+        id: "default-org-id",
+        name: "Default Workspace",
+        slug: "default",
+      },
+    });
+    let organizationId = requestedOrgId || defaultOrg.id;
 
     if (!file) {
+      const issue: ValidationIssue = {
+        code: "FILE_EXTENSION_INVALID",
+        severity: "error",
+        sheet: "system",
+        message: "請上傳 Excel 檔案 (.xlsx)",
+        suggestion: "請選擇標準 .xlsx 檔案進行上傳。",
+      };
+
+      if (mode === "save") {
+        await recordFailedImport({
+          importId,
+          organizationId,
+          fileName: null,
+          fileSize: 0,
+          mode,
+          errorCode: issue.code,
+          errorMessage: issue.message,
+          errorDetails: [issue],
+        });
+      }
+
       return NextResponse.json(
         {
           success: false,
-          error: "請上傳 Excel 檔案 (.xlsx)",
-          errors: [
-            {
-              code: "FILE_EXTENSION_INVALID",
-              severity: "error",
-              sheet: "system",
-              message: "請上傳 Excel 檔案 (.xlsx)",
-            },
-          ],
+          error: issue.message,
+          importId,
+          errors: [issue],
           warnings: [],
         } satisfies ImportResponse,
         { status: 400 }
@@ -41,12 +120,27 @@ export async function POST(req: NextRequest) {
         severity: "error",
         sheet: "system",
         message: `檔案大小不可超過 ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+        suggestion: "請精簡檔案內容、移除多餘工作表或過大圖片，確保檔案小於 5MB。",
       };
+
+      if (mode === "save") {
+        await recordFailedImport({
+          importId,
+          organizationId,
+          fileName: file.name,
+          fileSize: file.size,
+          mode,
+          errorCode: issue.code,
+          errorMessage: issue.message,
+          errorDetails: [issue],
+        });
+      }
 
       return NextResponse.json(
         {
           success: false,
           error: issue.message,
+          importId,
           errors: [issue],
           warnings: [],
         } satisfies ImportResponse,
@@ -63,19 +157,33 @@ export async function POST(req: NextRequest) {
         severity: "error",
         sheet: "system",
         message: "檔案內容不是有效的 Excel (.xlsx) 格式（可能被竄改副檔名或檔案損毀）",
+        suggestion: "請確認檔案為合法的 Microsoft Excel (.xlsx) 試算表。",
       };
+
+      if (mode === "save") {
+        await recordFailedImport({
+          importId,
+          organizationId,
+          fileName: file.name,
+          fileSize: file.size,
+          mode,
+          errorCode: issue.code,
+          errorMessage: issue.message,
+          errorDetails: [issue],
+        });
+      }
 
       return NextResponse.json(
         {
           success: false,
           error: issue.message,
+          importId,
           errors: [issue],
           warnings: [],
         } satisfies ImportResponse,
         { status: 400 }
       );
     }
-    // ===== 檢查結束 =====
 
     const { questions, errors: parseErrors, issues: parseIssues } = await parseSurveyExcel(
       Buffer.from(arrayBuffer)
@@ -90,18 +198,23 @@ export async function POST(req: NextRequest) {
       allErrors.push(...structureValidation.errors);
       structureValidation.errors.forEach((errMsg) => {
         let code: ValidationIssue["code"] = "UNKNOWN_ERROR";
+        let suggestion = "請檢查題目結構與邏輯設定。";
         if (errMsg.includes("循環相依")) {
           code = "BRANCHING_CYCLE";
+          suggestion = "請檢查題目的 visibility_rules，確保跳題條件為單向依賴且不形成死循環。";
         } else if (errMsg.includes("條件規則")) {
           code = "INVALID_VISIBILITY_RULE";
+          suggestion = "請檢查跳題條件語法是否符合 SHOW IF 規範。";
         } else if (errMsg.includes("重複的選項")) {
           code = "DUPLICATE_CHOICE_VALUE";
+          suggestion = "請確保同一題目的選項代碼 (value) 不重複。";
         }
         allIssues.push({
           code,
           severity: "error",
           sheet: "questions",
           message: errMsg,
+          suggestion,
         });
       });
     }
@@ -110,16 +223,32 @@ export async function POST(req: NextRequest) {
     const warningIssues = allIssues.filter((i) => i.severity === "warning");
 
     if (allErrors.length > 0 || errorIssues.length > 0) {
+      const finalErrors = errorIssues.length > 0 ? errorIssues : allErrors.map((msg) => ({
+        code: "UNKNOWN_ERROR" as const,
+        severity: "error" as const,
+        sheet: "system" as const,
+        message: msg,
+      }));
+
+      if (mode === "save") {
+        await recordFailedImport({
+          importId,
+          organizationId,
+          fileName: file.name,
+          fileSize: file.size,
+          mode,
+          errorCode: finalErrors[0]?.code || "VALIDATION_FAILED",
+          errorMessage: "Excel 格式、條件規則或結構校驗未通過",
+          errorDetails: finalErrors,
+        });
+      }
+
       return NextResponse.json(
         {
           success: false,
           error: "Excel 格式、條件規則或結構校驗未通過",
-          errors: errorIssues.length > 0 ? errorIssues : allErrors.map((msg) => ({
-            code: "UNKNOWN_ERROR",
-            severity: "error",
-            sheet: "system",
-            message: msg,
-          })),
+          importId,
+          errors: finalErrors,
           warnings: warningIssues,
           questions,
         } as any,
@@ -128,18 +257,33 @@ export async function POST(req: NextRequest) {
     }
 
     if (questions.length === 0) {
+      const issue: ValidationIssue = {
+        code: "REQUIRED_FIELD_EMPTY",
+        severity: "error",
+        sheet: "questions",
+        message: "Excel 內未找到任何有效題目",
+        suggestion: "請在 questions 工作表中填寫至少一題題目資料。",
+      };
+
+      if (mode === "save") {
+        await recordFailedImport({
+          importId,
+          organizationId,
+          fileName: file.name,
+          fileSize: file.size,
+          mode,
+          errorCode: issue.code,
+          errorMessage: issue.message,
+          errorDetails: [issue],
+        });
+      }
+
       return NextResponse.json(
         {
           success: false,
-          error: "Excel 內未找到任何有效題目",
-          errors: [
-            {
-              code: "REQUIRED_FIELD_EMPTY",
-              severity: "error",
-              sheet: "questions",
-              message: "Excel 內未找到任何有效題目",
-            },
-          ],
+          error: issue.message,
+          importId,
+          errors: [issue],
           warnings: [],
         } satisfies ImportResponse,
         { status: 400 }
@@ -150,8 +294,8 @@ export async function POST(req: NextRequest) {
     const requiredQuestions = questions.filter((q) => q.required).length;
     const scoredQuestions = questions.filter((q) => q.scoringEnabled).length;
     const conditionalQuestions = questions.filter((q) => !!q.visibilityRules).length;
-    const importId = `IMP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
+    // ===== Preview / Dry Run 模式 (零 DB 寫入) =====
     if (mode === "preview") {
       return NextResponse.json({
         success: true,
@@ -179,19 +323,32 @@ export async function POST(req: NextRequest) {
       formData.get("copyrightConfirmed") === "1";
 
     if (mode === "save" && !copyrightConfirmed) {
+      const issue: ValidationIssue = {
+        code: "COPYRIGHT_NOT_CONFIRMED",
+        severity: "error",
+        sheet: "system",
+        message: "未確認使用者內容與版權宣告",
+        suggestion: "請在確認匯入前勾選「我確認我有權使用並匯入上述內容」聲明方塊。",
+      };
+
+      await recordFailedImport({
+        importId,
+        organizationId,
+        fileName: file.name,
+        fileSize: file.size,
+        mode,
+        errorCode: issue.code,
+        errorMessage: issue.message,
+        errorDetails: [issue],
+        copyrightConfirmed: false,
+      });
+
       return NextResponse.json(
         {
           success: false,
           error: "請先確認您具有匯入內容的合法使用權利",
-          errors: [
-            {
-              code: "COPYRIGHT_NOT_CONFIRMED",
-              severity: "error",
-              sheet: "system",
-              message: "未確認使用者內容與版權宣告",
-              suggestion: "請在確認匯入前勾選「我確認我有權使用並匯入上述內容」聲明方塊。",
-            },
-          ],
+          importId,
+          errors: [issue],
           warnings: [],
         } satisfies ImportResponse,
         { status: 400 }
@@ -199,7 +356,6 @@ export async function POST(req: NextRequest) {
     }
 
     let version = 1;
-    let organizationId = "default-org-id";
     if (parentSurveyId) {
       const parent = await db.survey.findUnique({ where: { id: parentSurveyId } });
       if (parent) {
@@ -208,9 +364,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ===== P0-F: All-or-Nothing Import / Atomic Transaction =====
-    const survey = await db.$transaction(async (tx) => {
-      return await tx.survey.create({
+    // ===== P0-F & M6D: All-or-Nothing Import & Audit Atomic Transaction =====
+    const { survey, importRecord } = await db.$transaction(async (tx) => {
+      const createdSurvey = await tx.survey.create({
         data: {
           organizationId,
           title,
@@ -261,13 +417,35 @@ export async function POST(req: NextRequest) {
           },
         },
       });
+
+      // 同步寫入 SurveyImport 稽核紀錄
+      const createdImport = await tx.surveyImport.create({
+        data: {
+          importId,
+          surveyId: createdSurvey.id,
+          organizationId,
+          fileName: file.name,
+          fileSize: file.size,
+          mode: "save",
+          status: ImportStatus.SUCCESS,
+          questionCount: questions.length,
+          choiceCount: totalChoices,
+          requiredCount: requiredQuestions,
+          scoredCount: scoredQuestions,
+          conditionalCount: conditionalQuestions,
+          copyrightConfirmed: true,
+          completedAt: new Date(),
+        },
+      });
+
+      return { survey: createdSurvey, importRecord: createdImport };
     });
 
     return NextResponse.json({
       success: true,
       mode: "save",
       surveyId: survey.id,
-      importId,
+      importId: importRecord.importId,
       version: survey.version,
       survey,
       summary: {
@@ -286,7 +464,6 @@ export async function POST(req: NextRequest) {
     const errorId = `IMP-ERR-${Date.now().toString(36).toUpperCase()}`;
     console.error(`[Excel Import API Error] ID: ${errorId}`, err);
 
-    // P0-K / P0-L: 生產環境不洩漏伺服器檔案路徑、DB 連線字串或 Prisma 內部 stack trace
     return NextResponse.json(
       {
         success: false,

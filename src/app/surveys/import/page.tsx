@@ -354,6 +354,13 @@ export default function ImportSurveyPage() {
               <BarChart3 className="w-4 h-4 text-slate-500" />
               <span>查看問卷統計報表</span>
             </Link>
+            <Link
+              href="/surveys/import/history"
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold rounded-xl transition border border-indigo-200"
+            >
+              <List className="w-4 h-4 text-indigo-600" />
+              <span>查看匯入歷史紀錄</span>
+            </Link>
             <button
               onClick={handleReset}
               className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-600 text-sm font-semibold rounded-xl transition border border-slate-300"
@@ -381,13 +388,22 @@ export default function ImportSurveyPage() {
           </p>
         </div>
 
-        <a
-          href="/api/template"
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition shrink-0"
-        >
-          <Download className="w-4 h-4 text-slate-500" />
-          <span>下載示範範本 (demo-survey.xlsx)</span>
-        </a>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/surveys/import/history"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-xl border border-indigo-200 transition"
+          >
+            <List className="w-4 h-4 text-indigo-600" />
+            <span>匯入歷史紀錄</span>
+          </Link>
+          <a
+            href="/api/template"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition"
+          >
+            <Download className="w-4 h-4 text-slate-500" />
+            <span>下載示範範本 (demo-survey.xlsx)</span>
+          </a>
+        </div>
       </div>
 
       {/* ===== 題庫製作注意事項（可收合） ===== */}

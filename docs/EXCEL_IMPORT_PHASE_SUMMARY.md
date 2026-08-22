@@ -59,9 +59,21 @@
 - [x] 生產環境錯誤回應脫敏（隱藏伺服器路徑與 DB 連線字串，提供專屬錯誤 ID）
 - [x] M6-C 整合測試套件 `test/m6c-excel-safety.test.ts`（8/8 通過）
 
+### Phase M6D：Enterprise Import History & Audit（企業級歷史與稽核）
+- [x] 新增 `SurveyImport` 資料模型與 `add_survey_import_audit` 資料庫 Migration
+- [x] 正式建立具唯一約束之 `importId`（`IMP-YYYYMMDD-XXXXXX`）
+- [x] 成功匯入於 Prisma Transaction 中同步寫入問卷與 `SUCCESS` 稽核紀錄（100% 資料一致性）
+- [x] 失敗匯入自動捕捉並記錄 `FAILED` 狀態、錯誤代碼與 `errorDetails` 結構化 Issue JSON
+- [x] 實作 `GET /api/surveys/import/history` 歷史紀錄分頁與狀態篩選 API（支援多租戶組織隔離）
+- [x] 實作 `GET /api/surveys/import/:importId` 單筆稽核詳情 API
+- [x] 實作 `GET /api/surveys/import/:importId/errors` 錯誤報告 CSV 匯出功能 (P1)
+- [x] 實作 `/surveys/import/history` 匯入歷史紀錄中心 UI（含狀態篩選、詳情 Modal、填答導覽與錯誤報告下載）
+- [x] 確立企業資料保留政策（Data Retention Policy）：系統預設不永久保存使用者原始 Excel 二進位檔案，僅保存中繼稽核資料
+- [x] 新增 `test/m6d-import-audit.test.ts` 測試套件（8/8 PASS）
+
 ### 品質
 - [x] `npm run typecheck` / `lint` / `test` / `build` 全過
-- [x] 測試數提升至 92 / 92 PASS（22 個測試套件全數通過）
+- [x] 測試數提升至 100 / 100 PASS（23 個測試套件全數通過）
 
 ---
 
@@ -81,18 +93,20 @@ Schema & Business Rule Validation（必填、唯一代碼、關聯、無循環�
      FAIL           PASS
       │              │
       ↓              ↓
- 錯誤診斷 UI      Dry Run 預覽
- (附修復建議)        ↓
-                 版權宣告確認
-                     ↓
-                 使用者確認匯入 (PUBLISHED 二次防呆)
-                     ↓
-                 Prisma Transaction 原子寫入
-                     ↓
-                 匯入成功摘要 (含 Import ID 與直達連結)
+ 寫入 FAILED 稽核   Dry Run 預覽
+ 錯誤診斷 UI (附修復建議) ↓
+                    版權宣告確認
+                        ↓
+                    使用者確認匯入 (PUBLISHED 二次防呆)
+                        ↓
+                    Prisma Transaction 原子寫入 (Survey + SurveyImport SUCCESS)
+                        ↓
+                    匯入成功摘要 (含 Import ID 與直達連結)
+                        ↓
+                    隨時可於 /surveys/import/history 查閱歷史紀錄與匯出 CSV 錯誤報告
 ```
 
-原則：**前端只做 UX 預檢，後端才是安全、防護與正確性邊界。**
+原則：**前端只做 UX 預檢，後端才是安全、防護、稽核與正確性邊界。**
 
 ---
 
@@ -128,15 +142,18 @@ Schema & Business Rule Validation（必填、唯一代碼、關聯、無循環�
 
 | 檔案 | 用途 |
 |------|------|
-| `src/types/surveyImport.ts` | 共用型別、錯誤碼、ValidationIssue、ImportResponse、ImportSummary |
+| `prisma/schema.prisma` | 定義 SurveyImport 模型與關聯 |
+| `src/types/surveyImport.ts` | 共用型別、錯誤碼、ValidationIssue、ImportResponse、SurveyImportRecord、ImportHistoryResponse |
 | `src/lib/validateSurveyExcel.ts` | 前端輕量驗證與即時診斷建議 |
 | `src/lib/excel-parser.ts` | 後端解析 + Magic Bytes + 資源上限 + Formula 防護 + issues |
-| `src/app/api/surveys/import/route.ts` | 匯入 API、Dry Run 預覽、版權校驗、Prisma Transaction 寫入、錯誤脫敏 |
+| `src/app/api/surveys/import/route.ts` | 匯入 API、Dry Run 預覽、版權校驗、Prisma Transaction 寫入 Survey + SurveyImport |
+| `src/app/api/surveys/import/history/route.ts` | 匯入歷史分頁查詢 API（多租戶組織隔離） |
+| `src/app/api/surveys/import/[importId]/route.ts` | 單筆匯入詳情查詢 API |
+| `src/app/api/surveys/import/[importId]/errors/route.ts` | 錯誤報告 CSV 下載 API |
 | `src/app/surveys/import/page.tsx` | 匯入 UI、規則說明、50筆問題篩選與建議、版權確認、Dry Run 預覽、成功摘要畫面 |
+| `src/app/surveys/import/history/page.tsx` | 匯入歷史紀錄與稽核中心 UI |
 | `EXCEL_IMPORT_SOP.md` | 使用者向欄位規格與作業指引 |
-| `test/validate-survey-excel.test.ts` | 前端驗證單元測試 |
-| `test/excel-parser.test.ts` | 解析 + Magic Bytes + 大小上限測試 |
-| `test/m6c-excel-safety.test.ts` | M6C 專屬安全、Formula 防護、版權校驗與 Transaction 回滾測試 |
+| `test/m6d-import-audit.test.ts` | M6D 專屬歷史紀錄、多租戶隔離、唯一性與 CSV 匯出測試 |
 
 ---
 
@@ -145,30 +162,32 @@ Schema & Business Rule Validation（必填、唯一代碼、關聯、無循環�
 1. **前端驗證 ≠ 安全邊界**，後端必須完整重驗證。
 2. API 以 `multipart/form-data` 收原始檔，不信任前端 JSON 為唯一來源。
 3. 錯誤使用穩定 `code` + 人類可讀 `message` + 具體可操作的 `suggestion`。
-4. 驗證失敗或中途錯誤不得寫入任何殘缺資料（Prisma Transaction Rollback）。
+4. 驗證失敗或中途錯誤不得寫入任何殘缺問卷資料（Prisma Transaction Rollback），但記錄獨立 FAILED 稽核。
 5. 預設偏向安全：`DRAFT` 預設、發布需二次確認、版權必須手動勾選。
 6. 不執行 Excel formula；公式視為純文字資料。
 7. 生產環境錯誤回應嚴格脫敏，絕不洩漏系統內部路徑與 DB 帳密。
+8. 系統預設不永久留存使用者原始 Excel 檔案，僅留存稽核中繼資料。
 
 ---
 
 ## 7. 建議後續 Roadmap
 
 ### 短期（已完成）
-- [x] 更新 `EXCEL_IMPORT_SOP.md`：補前端驗證、錯誤碼、Magic Bytes、後端上限與版權說明
+- [x] 更新 `EXCEL_IMPORT_SOP.md`：補前端驗證、錯誤碼、Magic Bytes、後端上限、版權與歷史說明
 - [x] 後端統一檔案大小、列數、儲存格長度上限
 - [x] 提供結構化錯誤修復建議與 50 筆分頁折疊
 - [x] 成功匯入摘要與導覽頁面
 - [x] All-or-Nothing 原子性交易保護
+- [x] SurveyImport 資料模型與歷史查詢 API
+- [x] 匯入歷史紀錄中心 UI 與 CSV 錯誤報告下載
 
 ### 中期
 - [ ] 範本加入 instructions 工作表與 data validation 下拉選單
-- [ ] 大量錯誤時提供「下載錯誤診斷報告 (CSV/XLSX)」
+- [ ] 結合 M6B Organization 權限與 RBAC 匯入管控
 
 ### 長期（視產品需求）
-- [ ] 結合 M6B Organization 權限與 RBAC 匯入管控
 - [ ] Rate limit 頻率限制
-- [ ] Audit log 匯入歷史稽核紀錄
+- [ ] 支援進階 Undo / 回滾操作（P2）
 
 ---
 
@@ -177,7 +196,7 @@ Schema & Business Rule Validation（必填、唯一代碼、關聯、無循環�
 ```bash
 npm run typecheck
 npm run lint
-npx vitest run test/m6c-excel-safety.test.ts
+npx vitest run test/m6d-import-audit.test.ts
 npm test
 npm run build
 ```
@@ -186,10 +205,9 @@ npm run build
 
 ## 9. 結論
 
-Phase M6C 已達成全部目標：
-- 使用者上傳前即可看到明確格式指引與資源限制
-- 錯誤時提供「哪裡錯、為什麼錯、怎麼修」的診斷體驗
-- Dry Run 預覽保證零 DB 污染
-- 版權確認與公式注入防護健全
-- 原子交易確保資料一致性與零殘缺寫入
-- 92 項自動化測試全數通過，生產環境建置成功！
+Phase M6D 已全數達成：
+- 每次 Excel 匯入均具備完整生命週期與稽核紀錄（SurveyImport）
+- 正式具備 `@unique` 之 Import ID
+- 支援多租戶組織隔離與分頁歷史查詢
+- 支援一鍵下載 CSV 錯誤診斷報告
+- 100 項自動化測試全數 PASS，生產環境建置成功！

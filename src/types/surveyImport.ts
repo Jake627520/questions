@@ -154,7 +154,51 @@ export type ImportMode = 'preview' | 'save';
 export type SurveyPublishStatus = 'DRAFT' | 'PUBLISHED';
 
 // ============================================================
-// 5. 輔助型別（方便後續 Phase 使用）
+// 5. 匯入稽核與歷史紀錄型別 (M6D)
+// ============================================================
+
+export type ImportAuditStatus = 'PREVIEW' | 'IMPORTING' | 'SUCCESS' | 'FAILED';
+
+export interface SurveyImportRecord {
+  id: string;
+  importId: string;
+  surveyId?: string | null;
+  organizationId: string;
+  createdById?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mode: string;
+  status: ImportAuditStatus;
+  questionCount: number;
+  choiceCount: number;
+  requiredCount: number;
+  scoredCount: number;
+  conditionalCount: number;
+  copyrightConfirmed: boolean;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  errorDetails?: string | null;
+  createdAt: string | Date;
+  completedAt?: string | Date | null;
+  survey?: {
+    id: string;
+    title: string;
+    status: string;
+    version: number;
+  } | null;
+}
+
+export interface ImportHistoryResponse {
+  success: boolean;
+  items: SurveyImportRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+// ============================================================
+// 6. 輔助型別（方便後續 Phase 使用）
 // ============================================================
 
 /** 題型（與現有 QuestionTypeEnum 保持一致） */
