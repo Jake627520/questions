@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { SurveyStatus } from "@prisma/client";
-import { getCurrentUser, unauthorizedResponse, forbiddenResponse, hasRole, ROLES } from "@/lib/auth";
+import { getCurrentUser, unauthorizedResponse, forbiddenResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
 
 export async function POST(
   req: NextRequest,
@@ -46,9 +46,11 @@ export async function POST(
     const clonedSurvey = await db.survey.create({
       data: {
         organizationId: sourceSurvey.organizationId,
+        publicToken: generatePublicToken(),
+        createdById: auth.user.id,
         title: newTitle,
         description: sourceSurvey.description,
-        status: SurveyStatus.PUBLISHED,
+        status: SurveyStatus.DRAFT,
         version: nextVersion,
         parentSurveyId: sourceSurvey.id,
         questions: {

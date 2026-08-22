@@ -105,6 +105,7 @@ model Membership {
 
 model Survey {
   id              String       @id @default(cuid())
+  publicToken     String?      @unique @map("public_token")
   organizationId  String       @map("organization_id")
   createdById     String?      @map("created_by_id")
   parentSurveyId  String?      @map("parent_survey_id")

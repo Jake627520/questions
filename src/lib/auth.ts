@@ -323,4 +323,13 @@ export function forbiddenResponse(
   );
 }
 
+/**
+ * 產生 256-bit 高熵、URL-safe 且不可預測之 Public Token (用於公開填答 URL)
+ */
+export function generatePublicToken(): string {
+  return crypto.randomBytes(24).toString("base64url");
+}
+
+
+
 

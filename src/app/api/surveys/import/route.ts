@@ -4,7 +4,7 @@ import { validateQuestionsStructure } from "@/lib/survey-engine";
 import { db } from "@/lib/db";
 import { ImportStatus, QuestionType, SurveyStatus } from "@prisma/client";
 import { ImportResponse, ValidationIssue } from "@/types/surveyImport";
-import { getCurrentUser, isUserInOrganization, forbiddenResponse, hasRole, ROLES } from "@/lib/auth";
+import { getCurrentUser, isUserInOrganization, forbiddenResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
 
 function generateImportId(): string {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -381,6 +381,7 @@ export async function POST(req: NextRequest) {
       const createdSurvey = await tx.survey.create({
         data: {
           organizationId,
+          publicToken: generatePublicToken(),
           createdById: auth?.user.id || null,
           title,
           description,
