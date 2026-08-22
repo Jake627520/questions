@@ -37,6 +37,12 @@ export default function RootLayout({
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>Excel 匯入題庫</span>
               </Link>
+              <Link
+                href="/account"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition border border-slate-200"
+              >
+                <span>帳號管理</span>
+              </Link>
             </nav>
           </div>
         </header>

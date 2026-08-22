@@ -233,6 +233,28 @@ export function getSessionCookieOptions(expiresAt?: Date) {
   };
 }
 
+/**
+ * 驗證並過濾 returnTo 轉址路徑，防止 Open Redirect 漏洞
+ * 僅允許以單一 / 開頭的同源相對路徑，嚴格阻擋 //、http://、https:// 等外部網址
+ */
+export function getSafeReturnUrl(returnTo: string | null | undefined, defaultUrl = "/"): string {
+  if (!returnTo || typeof returnTo !== "string") {
+    return defaultUrl;
+  }
+  const trimmed = returnTo.trim();
+  // 必須以 / 開頭，且不能以 // 或 /\ 開頭（防止 protocol-relative URL），不能包含冒號或反斜線
+  if (
+    trimmed.startsWith("/") &&
+    !trimmed.startsWith("//") &&
+    !trimmed.startsWith("/\\") &&
+    !trimmed.includes(":") &&
+    !trimmed.includes("\\")
+  ) {
+    return trimmed;
+  }
+  return defaultUrl;
+}
+
 // =========================================================================
 // 4. Tenant / Organization Isolation & RBAC Helpers
 // =========================================================================
