@@ -4,7 +4,7 @@ import { validateQuestionsStructure } from "@/lib/survey-engine";
 import { db } from "@/lib/db";
 import { ImportStatus, QuestionType, SurveyStatus } from "@prisma/client";
 import { ImportResponse, ValidationIssue } from "@/types/surveyImport";
-import { getCurrentUser, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
+import { getCurrentUser, isUserInOrganization, forbiddenResponse, hasRole, ROLES } from "@/lib/auth";
 
 function generateImportId(): string {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -82,9 +82,12 @@ export async function POST(req: NextRequest) {
 
     const auth = await getCurrentUser(req);
     if (auth && mode === "save") {
-      const isMember = await isUserInOrganization(auth.user.id, organizationId);
-      if (!isMember) {
-        return forbiddenResponse("您無權匯入問卷至該組織");
+      const { allowed, membership } = await hasRole(auth.user.id, organizationId, ROLES.EDITORS);
+      if (!membership) {
+        return forbiddenResponse("您非該組織成員，無權匯入問卷至該組織");
+      }
+      if (!allowed) {
+        return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能匯入問卷");
       }
     }
 

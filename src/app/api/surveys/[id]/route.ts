@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
+import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenResponse, hasRole, ROLES } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
@@ -75,9 +75,12 @@ export async function PATCH(
       return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
     }
 
-    const isMember = await isUserInOrganization(auth.user.id, existingSurvey.organizationId);
-    if (!isMember) {
-      return forbiddenResponse("您無權修改此組織的問卷");
+    const { allowed, membership } = await hasRole(auth.user.id, existingSurvey.organizationId, ROLES.EDITORS);
+    if (!membership) {
+      return forbiddenResponse("您非該組織成員，無權修改此問卷");
+    }
+    if (!allowed) {
+      return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能修改問卷");
     }
 
     // 若問卷已發布 (PUBLISHED)，禁止直接修改會影響歷史結果之題目、計分與條件規則

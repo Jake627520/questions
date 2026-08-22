@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ResponseStatus } from "@prisma/client";
-import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
+import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenResponse, hasRole, ROLES } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
@@ -96,9 +96,12 @@ export async function DELETE(
       if (!auth) {
         return unauthorizedResponse();
       }
-      const isMember = await isUserInOrganization(auth.user.id, response.survey.organizationId);
-      if (!isMember) {
-        return forbiddenResponse("您無權刪除此組織的回覆記錄");
+      const { allowed, membership } = await hasRole(auth.user.id, response.survey.organizationId, ROLES.MANAGERS);
+      if (!membership) {
+        return forbiddenResponse("您非該組織成員，無權刪除此組織的回覆記錄");
+      }
+      if (!allowed) {
+        return forbiddenResponse("您的角色權限不足，需要 ADMIN 或 OWNER 權限才能刪除正式回覆記錄");
       }
 
       if (!force) {

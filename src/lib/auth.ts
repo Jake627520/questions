@@ -234,8 +234,20 @@ export function getSessionCookieOptions(expiresAt?: Date) {
 }
 
 // =========================================================================
-// 4. Tenant / Organization Isolation Helpers
+// 4. Tenant / Organization Isolation & RBAC Helpers
 // =========================================================================
+
+import { Role } from "@prisma/client";
+
+/**
+ * 標準角色授權群組
+ */
+export const ROLES = {
+  ALL: [Role.OWNER, Role.ADMIN, Role.EDITOR, Role.VIEWER] as Role[],
+  MANAGERS: [Role.OWNER, Role.ADMIN] as Role[],
+  EDITORS: [Role.OWNER, Role.ADMIN, Role.EDITOR] as Role[],
+  OWNER_ONLY: [Role.OWNER] as Role[],
+} as const;
 
 /**
  * 取得使用者的所有組織 ID 清單
@@ -249,23 +261,54 @@ export async function getUserOrganizationIds(userId: string): Promise<string[]> 
 }
 
 /**
- * 檢查使用者是否為指定組織的成員
+ * 取得使用者在特定組織的 Membership (包含 Role)
  */
-export async function isUserInOrganization(userId: string, organizationId: string): Promise<boolean> {
-  if (!userId || !organizationId) return false;
-  const membership = await db.membership.findUnique({
+export async function getUserMembership(
+  userId: string,
+  organizationId: string
+): Promise<{ id: string; role: Role; organizationId: string } | null> {
+  if (!userId || !organizationId) return null;
+  return db.membership.findUnique({
     where: {
       userId_organizationId: {
         userId,
         organizationId,
       },
     },
+    select: {
+      id: true,
+      role: true,
+      organizationId: true,
+    },
   });
+}
+
+/**
+ * 檢查使用者是否為指定組織的成員
+ */
+export async function isUserInOrganization(userId: string, organizationId: string): Promise<boolean> {
+  const membership = await getUserMembership(userId, organizationId);
   return !!membership;
 }
 
 /**
- * 統一產生 403 Forbidden 回應（跨租戶存取阻擋）
+ * 檢查使用者在特定組織中是否具備指定角色權限 (RBAC Guard)
+ */
+export async function hasRole(
+  userId: string,
+  organizationId: string,
+  allowedRoles: Role[]
+): Promise<{ allowed: boolean; membership: { id: string; role: Role; organizationId: string } | null }> {
+  const membership = await getUserMembership(userId, organizationId);
+  if (!membership) {
+    return { allowed: false, membership: null };
+  }
+  const allowed = allowedRoles.includes(membership.role);
+  return { allowed, membership };
+}
+
+/**
+ * 統一產生 403 Forbidden 回應（跨租戶存取或角色權限不足阻擋）
  */
 export function forbiddenResponse(
   message = "無權存取該組織的資源",
@@ -279,4 +322,5 @@ export function forbiddenResponse(
     { status: 403 }
   );
 }
+
 
