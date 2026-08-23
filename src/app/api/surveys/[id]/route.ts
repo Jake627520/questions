@@ -11,6 +11,48 @@ export async function GET(
     const survey = await db.survey.findUnique({
       where: { id },
       include: {
+        parentSurvey: {
+          select: {
+            id: true,
+            version: true,
+            title: true,
+            status: true,
+            createdAt: true,
+          },
+        },
+        childVersions: {
+          select: {
+            id: true,
+            version: true,
+            title: true,
+            status: true,
+            createdAt: true,
+            _count: {
+              select: { responses: true },
+            },
+          },
+          orderBy: { version: "asc" },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+        _count: {
+          select: {
+            questions: true,
+            responses: true,
+          },
+        },
         questions: {
           orderBy: { orderNum: "asc" },
           include: {
