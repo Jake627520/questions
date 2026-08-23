@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { hashInvitationToken } from "@/lib/auth";
+import { hashInvitationToken, maskEmail } from "@/lib/auth";
 
 /**
  * GET /api/invitations/[token]
@@ -64,13 +64,13 @@ export async function GET(
       );
     }
 
-    // 3. 回傳最小化公開預覽資訊 (絕對不洩漏 tokenHash、內部 ID 或建立者)
+    // 3. 回傳最小化公開預覽資訊 (絕對不洩漏 tokenHash、內部 ID 或建立者，且 Email 進行隱私遮罩)
     return NextResponse.json({
       success: true,
       invitation: {
         organizationName: invitation.organization.name,
         organizationSlug: invitation.organization.slug,
-        invitedEmail: invitation.invitedEmail,
+        invitedEmail: maskEmail(invitation.invitedEmail),
         role: invitation.role,
         expiresAt: invitation.expiresAt,
       },

@@ -235,24 +235,11 @@ export default function AcceptInvitationPage() {
               註冊新帳號
             </Link>
           </div>
-        ) : !isEmailMatch ? (
-          <div className="space-y-4">
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs leading-relaxed">
-              <p className="font-semibold mb-1">電子郵件不符提示：</p>
-              此邀請專屬於 <strong>{invitation.invitedEmail}</strong>。您目前登入身分為 <strong>{currentUser.email}</strong>。請切換至正確帳號後再接受邀請。
-            </div>
-            <Link
-              href={`/login?returnTo=/invite/${token}`}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors shadow-sm"
-            >
-              切換帳號登入
-            </Link>
-          </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs text-slate-500 mb-2 justify-center">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              登入身分比對正確 ({currentUser.email})
+            <div className="flex items-center justify-between text-xs text-slate-500 mb-1 px-1">
+              <span>目前登入帳號：</span>
+              <span className="font-mono font-medium text-slate-800">{currentUser.email}</span>
             </div>
             <button
               onClick={handleAccept}
@@ -271,6 +258,14 @@ export default function AcceptInvitationPage() {
                 </>
               )}
             </button>
+            <div className="text-center pt-2">
+              <Link
+                href={`/login?returnTo=/invite/${token}`}
+                className="text-xs text-slate-400 hover:text-slate-600 transition"
+              >
+                非受邀帳號？切換其他帳號登入
+              </Link>
+            </div>
           </div>
         )}
       </div>

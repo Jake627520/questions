@@ -472,3 +472,35 @@ export function hashInvitationToken(rawToken: string): string {
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
+
+// =========================================================================
+// 7. Password Reset & Account Recovery Helpers
+// =========================================================================
+
+export const PASSWORD_RESET_EXPIRY_MINUTES = 60;
+
+/**
+ * 產生 256-bit (32 bytes) CSPRNG 高熵密碼重設 Token (Base64URL 編碼)
+ */
+export function generatePasswordResetToken(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+/**
+ * 計算密碼重設 Token 之 SHA-256 雜湊 (儲存於資料庫以杜絕明文洩漏)
+ */
+export function hashPasswordResetToken(rawToken: string): string {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
+
+/**
+ * 電子郵件遮罩 (用於公開預覽，最小化資訊揭露，例如 j***@example.com 或 jo***h@example.com)
+ */
+export function maskEmail(email: string): string {
+  if (!email || !email.includes("@")) return "***";
+  const [local, domain] = email.split("@");
+  if (local.length <= 2) {
+    return `${local[0]}***@${domain}`;
+  }
+  return `${local.slice(0, 2)}***${local.slice(-1)}@${domain}`;
+}

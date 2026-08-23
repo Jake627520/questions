@@ -317,7 +317,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
 
       expect(data.success).toBe(true);
       expect(data.invitation.organizationName).toBe("Org Alpha Enterprise");
-      expect(data.invitation.invitedEmail).toBe("m8c-candidate@example.com");
+      expect(data.invitation.invitedEmail).toBe("m8***e@example.com");
       expect(data.invitation.role).toBe("EDITOR");
 
       // 嚴格驗證不洩漏的內部欄位
