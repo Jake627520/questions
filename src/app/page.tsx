@@ -263,18 +263,25 @@ export default function HomePage() {
 
         <div className="flex items-center gap-3">
           <Link
+            href="/analytics"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-700 font-semibold text-sm rounded-xl transition shadow-xs"
+          >
+            <TrendingUp className="w-4 h-4 text-blue-600" />
+            <span>分析中心</span>
+          </Link>
+          <Link
             href="/surveys/import"
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-xl shadow-sm hover:shadow transition"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>匯入 Excel 題庫</span>
+            <span>匯入題庫</span>
           </Link>
           <Link
             href="/settings/team"
             className="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition shadow-xs"
           >
-            <Users className="w-4 h-4 text-blue-600" />
-            <span>團隊協作與權限</span>
+            <Users className="w-4 h-4 text-slate-500" />
+            <span>團隊協作</span>
           </Link>
         </div>
       </div>
