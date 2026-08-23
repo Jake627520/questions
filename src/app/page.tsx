@@ -270,11 +270,11 @@ export default function HomePage() {
             <span>匯入 Excel 題庫</span>
           </Link>
           <Link
-            href="/settings/organization"
+            href="/settings/team"
             className="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl transition shadow-xs"
           >
-            <Users className="w-4 h-4 text-slate-500" />
-            <span>組織與成員</span>
+            <Users className="w-4 h-4 text-blue-600" />
+            <span>團隊協作與權限</span>
           </Link>
         </div>
       </div>
@@ -521,9 +521,15 @@ export default function HomePage() {
 
                   {/* Metrics Bar */}
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                    <div className="flex items-center gap-1.5">
-                      <Layers className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{survey._count.questions} 題題庫</span>
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{survey._count.questions} 題</span>
+                      </span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-slate-400 truncate max-w-[100px]" title={survey.createdBy?.email || "未知"}>
+                        {survey.createdBy?.name || survey.createdBy?.email?.split("@")[0] || "系統"}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
@@ -628,6 +634,7 @@ export default function HomePage() {
                   <th className="py-3 px-4">版本</th>
                   <th className="py-3 px-4">題數</th>
                   <th className="py-3 px-4">填答數</th>
+                  <th className="py-3 px-4">建立者</th>
                   <th className="py-3 px-4">建立時間</th>
                   <th className="py-3 px-4 text-right">生命週期與操作</th>
                 </tr>
@@ -673,6 +680,11 @@ export default function HomePage() {
                     <td className="py-3 px-4 font-mono text-slate-600">{survey._count.questions}</td>
                     <td className="py-3 px-4 font-mono font-medium text-slate-900">
                       {survey._count.responses}
+                    </td>
+                    <td className="py-3 px-4 text-slate-600">
+                      <span className="truncate max-w-[90px] inline-block" title={survey.createdBy?.email || "未知"}>
+                        {survey.createdBy?.name || survey.createdBy?.email?.split("@")[0] || "-"}
+                      </span>
                     </td>
                     <td className="py-3 px-4 text-slate-500">
                       {new Date(survey.createdAt).toLocaleDateString("zh-TW")}

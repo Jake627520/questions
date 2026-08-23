@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Building2,
   Users,
@@ -257,6 +258,22 @@ export default function OrganizationSettingsPage() {
             )}
           </div>
           <p className="text-sm text-slate-500 mt-1">工作區基礎設定、成員名冊與邀請管理</p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link
+            href="/settings/team"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition shadow-xs"
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>團隊協作與權限設定</span>
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
+          >
+            <span>返回問卷</span>
+          </Link>
         </div>
       </div>
 
