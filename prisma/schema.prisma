@@ -54,6 +54,7 @@ model User {
   createdSurveys Survey[]       @relation("SurveyCreator")
   surveyImports  SurveyImport[]
   sessions       Session[]
+  invitations    Invitation[]   @relation("InvitationCreator")
 
   @@map("users")
 }
@@ -82,6 +83,7 @@ model Organization {
   memberships   Membership[]
   surveys       Survey[]
   surveyImports SurveyImport[]
+  invitations   Invitation[]
 
   @@map("organizations")
 }
@@ -101,6 +103,27 @@ model Membership {
   @@index([organizationId])
   @@index([userId])
   @@map("memberships")
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  invitedEmail   String    @map("invited_email")
+  role           Role      @default(VIEWER)
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at")
+  usedAt         DateTime? @map("used_at")
+  revokedAt      DateTime? @map("revoked_at")
+  createdById    String    @map("created_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([tokenHash])
+  @@index([invitedEmail])
+  @@map("invitations")
 }
 
 model Survey {

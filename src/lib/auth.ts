@@ -444,3 +444,31 @@ export async function getActiveOrganizationContext(req?: NextRequest): Promise<{
     },
   };
 }
+
+// =========================================================================
+// 6. Enterprise Invitation Helpers
+// =========================================================================
+
+export const INVITATION_EXPIRY_DAYS = 7;
+export const INVITABLE_ROLES = [Role.ADMIN, Role.EDITOR, Role.VIEWER] as const;
+
+/**
+ * 產生 256-bit (32 bytes) CSPRNG 高熵邀請 Token (Base64URL 編碼)
+ */
+export function generateInvitationToken(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+/**
+ * 計算邀請 Token 之 SHA-256 雜湊 (儲存於資料庫以杜絕明文洩漏)
+ */
+export function hashInvitationToken(rawToken: string): string {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
+
+/**
+ * 電子郵件正規化 (去除頭尾空白並轉小寫，不破壞別名語意)
+ */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
