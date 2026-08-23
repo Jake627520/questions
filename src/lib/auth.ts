@@ -80,6 +80,13 @@ export async function verifyPassword(password: string, storedHash: string): Prom
 // =========================================================================
 
 /**
+ * 產生 256-bit (32 bytes) CSPRNG 高熵 Session Token (Hex 編碼)
+ */
+export function generateSessionToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+/**
  * 產生 256-bit 隨機 Session Token 並存入資料庫
  */
 export async function createSession(
@@ -87,7 +94,7 @@ export async function createSession(
   durationDays = DEFAULT_SESSION_DURATION_DAYS
 ): Promise<{ session: Session; token: string }> {
   // 生成高熵 256-bit (32 bytes) 隨機字串
-  const token = crypto.randomBytes(32).toString("hex");
+  const token = generateSessionToken();
   const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
 
   const session = await db.session.create({
