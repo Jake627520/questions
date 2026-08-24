@@ -3,15 +3,44 @@ import JSZip from "jszip";
 import { QuestionInput, ChoiceInput, QuestionType, QuestionTypeEnum } from "./types";
 import { ValidationIssue } from "../types/surveyImport";
 
-function parseBoolean(val: any): boolean {
+export function parseStrictBoolean(
+  val: any,
+  fieldName: string,
+  rowNum: number,
+  sheet: "questions" | "choices" | "system",
+  issues: ValidationIssue[],
+  errors: string[]
+): boolean {
+  if (val === null || val === undefined) return false;
   if (typeof val === "boolean") return val;
-  if (typeof val === "number") return val === 1;
+  if (typeof val === "number") {
+    if (val === 1) return true;
+    if (val === 0) return false;
+  }
   if (typeof val === "string") {
     const s = val.trim().toLowerCase();
-    return s === "true" || s === "1" || s === "yes" || s === "y" || s === "是";
+    if (s === "") return false;
+    if (s === "true" || s === "1" || s === "yes" || s === "y" || s === "是") return true;
+    if (s === "false" || s === "0" || s === "no" || s === "n" || s === "否") return false;
   }
+
+  const strVal = String(val).slice(0, 50);
+  const msg = `${sheet} 工作表第 ${rowNum} 列「${fieldName}」欄位的值「${strVal}」不是合法的布林值`;
+  errors.push(msg);
+  issues.push({
+    code: "INVALID_BOOLEAN_VALUE",
+    severity: "error",
+    sheet,
+    row: rowNum,
+    column: fieldName,
+    field: fieldName,
+    value: strVal,
+    message: msg,
+    suggestion: "請填寫 TRUE/FALSE、1/0、YES/NO 或保留空白（預設為 FALSE）。",
+  });
   return false;
 }
+
 
 function parseNumber(val: any): number | null {
   if (val === null || val === undefined || val === "") return null;
@@ -307,9 +336,9 @@ export async function parseSurveyExcel(
     }
 
     const questionType = typeParse.data;
-    const required = parseBoolean(getVal("required"));
-    const scoringEnabled = parseBoolean(getVal("scoring_enabled"));
-    const reverseScore = parseBoolean(getVal("reverse_score"));
+    const required = parseStrictBoolean(getVal("required"), "required", rowNumber, "questions", issues, errors);
+    const scoringEnabled = parseStrictBoolean(getVal("scoring_enabled"), "scoring_enabled", rowNumber, "questions", issues, errors);
+    const reverseScore = parseStrictBoolean(getVal("reverse_score"), "reverse_score", rowNumber, "questions", issues, errors);
 
     // M2 / M3 / M4 欄位
     const visibilityRules = getVal("visibility_rules")
@@ -433,11 +462,11 @@ export async function parseSurveyExcel(
       }
 
       const orderNum = parseNumber(getVal("order_num")) ?? (q.choices?.length || 0) + 1;
-      const scoreEnabled = parseBoolean(getVal("score_enabled"));
+      const scoreEnabled = parseStrictBoolean(getVal("score_enabled"), "score_enabled", rowNumber, "choices", issues, errors);
       const score = parseNumber(getVal("score"));
-      const isOther = parseBoolean(getVal("is_other"));
-      const requiresText = parseBoolean(getVal("requires_text"));
-      const isNoneOfAbove = parseBoolean(getVal("is_none_of_above"));
+      const isOther = parseStrictBoolean(getVal("is_other"), "is_other", rowNumber, "choices", issues, errors);
+      const requiresText = parseStrictBoolean(getVal("requires_text"), "requires_text", rowNumber, "choices", issues, errors);
+      const isNoneOfAbove = parseStrictBoolean(getVal("is_none_of_above"), "is_none_of_above", rowNumber, "choices", issues, errors);
 
       q.choices.push({
         orderNum,
