@@ -100,3 +100,53 @@ export interface SurveyAnalyticsSummary {
   inProgressResponses: number;
   questionCount: number;
 }
+
+/**
+ * =========================================================================
+ * Cross-tabulation Types (Phase M9-F.1 Pure Engine & Domain Contract)
+ * =========================================================================
+ */
+
+export type CrossTabMeasure =
+  | "COUNT"
+  | "ROW_PERCENTAGE"
+  | "COL_PERCENTAGE"
+  | "TOTAL_PERCENTAGE";
+
+export interface CrossTabCell {
+  rowChoiceValue: string;
+  colChoiceValue: string;
+  count: number;
+  rowPercentage: number;   // (cell.count / rowTotal.count) * 100
+  colPercentage: number;   // (cell.count / colTotal.count) * 100
+  totalPercentage: number; // (cell.count / grandTotal) * 100
+}
+
+export interface CrossTabDimensionItem {
+  value: string;
+  label: string;
+  orderNum: number;
+  count: number;           // 選擇此選項之雙重有效作答人數 (Paired Respondent Count)
+  percentage: number;      // (count / grandTotal) * 100
+}
+
+export interface CrossTabResult {
+  rowQuestion: {
+    id: string;
+    code: string;
+    title: string;
+    type: string;
+  };
+  colQuestion: {
+    id: string;
+    code: string;
+    title: string;
+    type: string;
+  };
+  matrix: CrossTabCell[][];
+  rowItems: CrossTabDimensionItem[];
+  colItems: CrossTabDimensionItem[];
+  grandTotal: number;      // 同時有效回答 Row 與 Col 之雙重有效作答 Response 數
+  unpairedCount: number;   // 未同時有效回答兩題之 Response 數 (totalResponses - grandTotal)
+  totalResponses: number;  // 傳入的總填答數 (符合 status/time 篩選)
+}
