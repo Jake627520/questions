@@ -174,3 +174,70 @@ export interface CrossTabStatistics {
   warning?: string | null;
 }
 
+/**
+ * =========================================================================
+ * Cross-tabulation Privacy & Suppression Types (Phase M9-F.3)
+ * =========================================================================
+ */
+
+export interface CrossTabPrivacyOptions {
+  minCellSize?: number; // 預設 5
+  enableComplementarySuppression?: boolean; // 預設 true
+}
+
+export interface ProtectedCrossTabCell {
+  rowChoiceValue: string;
+  colChoiceValue: string;
+  count: number | null;
+  displayValue: string; // 實際數字 或 "<5" 或 "—" 或 "0"
+  isSuppressed: boolean;
+  suppressionReason?: "PRIMARY" | "COMPLEMENTARY" | null;
+  rowPercentage: number | null;
+  colPercentage: number | null;
+  totalPercentage: number | null;
+}
+
+export interface ProtectedCrossTabDimensionItem {
+  value: string;
+  label: string;
+  orderNum: number;
+  count: number | null;
+  displayValue: string;
+  percentage: number | null;
+  isSuppressed: boolean;
+}
+
+export interface ProtectedCrossTabResult {
+  rowQuestion: {
+    id: string;
+    code: string;
+    title: string;
+    type: string;
+  };
+  colQuestion: {
+    id: string;
+    code: string;
+    title: string;
+    type: string;
+  };
+  matrix: ProtectedCrossTabCell[][];
+  rowItems: ProtectedCrossTabDimensionItem[];
+  colItems: ProtectedCrossTabDimensionItem[];
+  grandTotal: number | null;
+  grandTotalDisplay: string;
+  unpairedCount: number | null;
+  unpairedCountDisplay: string;
+  totalResponses: number;
+  statistics?: CrossTabStatistics | null;
+
+  privacy: {
+    minCellSize: number;
+    hasSuppression: boolean;
+    primarySuppressedCount: number;
+    complementarySuppressedCount: number;
+    totalSuppressedCells: number;
+    statisticsDisplayable: boolean;
+    privacyNotice: string | null;
+  };
+}
+

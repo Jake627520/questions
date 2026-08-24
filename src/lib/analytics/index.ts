@@ -5,3 +5,4 @@ export * from "./numeric-statistics";
 export * from "./question-analytics";
 export * from "./crosstab-engine";
 export * from "./crosstab-statistics";
+export * from "./crosstab-privacy";
