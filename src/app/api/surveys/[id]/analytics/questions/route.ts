@@ -9,6 +9,7 @@ import {
   forbiddenResponse,
   getUserMembership,
 } from "@/lib/auth";
+import { analyzeSurveyQuestions } from "@/lib/analytics";
 
 /**
  * GET /api/surveys/[id]/analytics/questions
@@ -123,149 +124,32 @@ export async function GET(
     });
 
     const totalResponses = responses.length;
+    const completedResponses = responses.filter((r) => r.status === ResponseStatus.COMPLETED).length;
+    const inProgressResponses = responses.filter((r) => r.status === ResponseStatus.IN_PROGRESS).length;
 
-    // 6. 計算每一題的統計指標
-    const questionAnalytics = survey.questions.map((q) => {
-      // 收集該題所有的答案
-      const answersForQ = responses.flatMap((r) =>
-        r.answers.filter((a) => a.questionId === q.id)
-      );
-
-      // 判斷作答有效性 (排除空值、空陣列或空字串)
-      const validAnswers = answersForQ.filter((a) => {
-        if (!a.rawValue) return false;
-        try {
-          const val = JSON.parse(a.rawValue);
-          if (val === null || val === undefined) return false;
-          if (Array.isArray(val)) return val.length > 0;
-          return String(val).trim() !== "";
-        } catch {
-          return String(a.rawValue).trim() !== "";
-        }
-      });
-
-      const answeredCount = validAnswers.length;
-      const notAnsweredCount = Math.max(0, totalResponses - answeredCount);
-      const responseRate =
-        totalResponses > 0
-          ? Math.round((answeredCount / totalResponses) * 1000) / 10
-          : 0;
-
-      // A. 選項分佈統計 (針對選擇題)
-      let distribution: any[] | null = null;
-      if (q.choices && q.choices.length > 0) {
-        distribution = q.choices.map((c) => {
-          let count = 0;
-          validAnswers.forEach((a) => {
-            try {
-              const val = JSON.parse(a.rawValue);
-              if (Array.isArray(val)) {
-                if (val.includes(c.value)) count++;
-              } else if (val === c.value) {
-                count++;
-              }
-            } catch {
-              if (a.rawValue === c.value) count++;
-            }
-          });
-
-          // 分母明確為 answeredCount，避免未回答拉低選項比例
-          const percentage =
-            answeredCount > 0
-              ? Math.round((count / answeredCount) * 1000) / 10
-              : 0;
-
-          return {
-            choiceId: c.id,
-            label: c.label,
-            value: c.value,
-            orderNum: c.orderNum,
-            count,
-            percentage,
-            score: c.score,
-            scoreEnabled: c.scoreEnabled,
-          };
-        });
-      }
-
-      // B. 數值與評分統計 (Rating / Scored Questions)
-      // 收集所有有效數值 (優先取 a.score，若無則若為 number 題型取 numeric rawValue)
-      const numericValues: number[] = [];
-      validAnswers.forEach((a) => {
-        if (a.score !== null && a.score !== undefined) {
-          numericValues.push(a.score);
-        } else if (q.questionType === "number" || q.scoringEnabled) {
-          try {
-            const val = JSON.parse(a.rawValue);
-            const num = parseFloat(val);
-            if (!isNaN(num)) numericValues.push(num);
-          } catch {
-            const num = parseFloat(a.rawValue);
-            if (!isNaN(num)) numericValues.push(num);
-          }
-        }
-      });
-
-      let statistics: {
-        n: number;
-        mean: number;
-        median: number;
-        min: number;
-        max: number;
-        standardDeviation: number | null;
-      } | null = null;
-
-      if (numericValues.length > 0) {
-        const n = numericValues.length;
-        const sum = numericValues.reduce((acc, v) => acc + v, 0);
-        const mean = sum / n;
-
-        // 計算 Median
-        const sorted = [...numericValues].sort((a, b) => a - b);
-        const mid = Math.floor(n / 2);
-        const median =
-          n % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-
-        const min = sorted[0];
-        const max = sorted[sorted.length - 1];
-
-        // 計算 Sample Standard Deviation (N >= 2)
-        // s = sqrt( sum( (x - mean)^2 ) / (n - 1) )
-        let standardDeviation: number | null = null;
-        if (n >= 2) {
-          const variance =
-            numericValues.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) /
-            (n - 1);
-          standardDeviation = Math.round(Math.sqrt(variance) * 100) / 100;
-        }
-
-        statistics = {
-          n,
-          mean: Math.round(mean * 100) / 100,
-          median: Math.round(median * 100) / 100,
-          min,
-          max,
-          standardDeviation,
-        };
-      }
-
-      return {
-        questionId: q.id,
+    // 6. 透過純函數分析引擎計算題目指標
+    const questionAnalytics = analyzeSurveyQuestions(
+      survey.questions.map((q) => ({
+        id: q.id,
         code: q.code,
         orderNum: q.orderNum,
         title: q.title,
         description: q.description,
-        type: q.questionType,
+        questionType: q.questionType,
         required: q.required,
         scoringEnabled: q.scoringEnabled,
-        totalResponses,
-        answeredCount,
-        notAnsweredCount,
-        responseRate,
-        distribution,
-        statistics,
-      };
-    });
+        reverseScore: q.reverseScore,
+        choices: q.choices.map((c) => ({
+          id: c.id,
+          orderNum: c.orderNum,
+          label: c.label,
+          value: c.value,
+          scoreEnabled: c.scoreEnabled,
+          score: c.score,
+        })),
+      })),
+      responses
+    );
 
     return NextResponse.json({
       success: true,
@@ -283,6 +167,8 @@ export async function GET(
       },
       summary: {
         totalResponses,
+        completedResponses,
+        inProgressResponses,
         questionCount: survey.questions.length,
       },
       questions: questionAnalytics,
