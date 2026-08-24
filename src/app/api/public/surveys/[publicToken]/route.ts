@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { SurveyStatus } from "@prisma/client";
 
+import { checkSurveyCollectionEligibility } from "@/lib/survey-lifecycle";
+
 export const dynamic = "force-dynamic";
 
 /**
  * 公開問卷讀取 API (Public Survey Endpoint)
  * - 依賴高熵 publicToken，禁止使用內部 survey.id 存取
  * - 自動脫敏：移除 scoringEnabled, reverseScore, choice.score 等內部敏感資料
+ * - 守衛：狀態、時間排程與填答配額檢查
  */
 export async function GET(
   req: NextRequest,
@@ -26,6 +29,9 @@ export async function GET(
     const survey = await db.survey.findUnique({
       where: { publicToken },
       include: {
+        _count: {
+          select: { responses: true },
+        },
         questions: {
           orderBy: { orderNum: "asc" },
           include: {
@@ -37,11 +43,30 @@ export async function GET(
       },
     });
 
-    // 必須存在且狀態為 PUBLISHED 才對外公開
     if (!survey || survey.status !== SurveyStatus.PUBLISHED) {
       return NextResponse.json(
         { error: "找不到該公開問卷或問卷目前未開放填答" },
         { status: 404 }
+      );
+    }
+
+    const eligibility = checkSurveyCollectionEligibility(
+      {
+        status: survey.status,
+        startDate: survey.startDate,
+        endDate: survey.endDate,
+        responseQuota: survey.responseQuota,
+      },
+      survey._count.responses
+    );
+
+    if (!eligibility.eligible) {
+      return NextResponse.json(
+        {
+          error: eligibility.code,
+          message: eligibility.message,
+        },
+        { status: 403 }
       );
     }
 

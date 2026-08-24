@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { evaluateSurveySubmission } from "@/lib/survey-engine";
 import { AnswerSubmission } from "@/lib/types";
 import { ResponseStatus, SurveyStatus } from "@prisma/client";
+import { checkSurveyCollectionEligibility } from "@/lib/survey-lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,9 @@ export async function POST(
     const survey = await db.survey.findUnique({
       where: { publicToken },
       include: {
+        _count: {
+          select: { responses: true },
+        },
         questions: {
           orderBy: { orderNum: "asc" },
           include: {
@@ -48,6 +52,26 @@ export async function POST(
       return NextResponse.json(
         { error: "找不到該公開問卷或問卷目前未開放填答" },
         { status: 404 }
+      );
+    }
+
+    const eligibility = checkSurveyCollectionEligibility(
+      {
+        status: survey.status,
+        startDate: survey.startDate,
+        endDate: survey.endDate,
+        responseQuota: survey.responseQuota,
+      },
+      survey._count.responses
+    );
+
+    if (!eligibility.eligible) {
+      return NextResponse.json(
+        {
+          error: eligibility.code,
+          message: eligibility.message,
+        },
+        { status: 403 }
       );
     }
 

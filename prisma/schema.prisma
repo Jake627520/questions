@@ -11,6 +11,7 @@ enum SurveyStatus {
   DRAFT
   PUBLISHED
   CLOSED
+  ARCHIVED
 }
 
 enum ResponseStatus {
@@ -153,6 +154,9 @@ model Survey {
   title           String
   description     String?      @db.Text
   status          SurveyStatus @default(DRAFT)
+  startDate       DateTime?    @map("start_date")
+  endDate         DateTime?    @map("end_date")
+  responseQuota   Int?         @map("response_quota")
   isAnonymous     Boolean      @default(true) @map("is_anonymous")
   collectIdentity Boolean      @default(false) @map("collect_identity")
   createdAt       DateTime     @default(now()) @map("created_at")
