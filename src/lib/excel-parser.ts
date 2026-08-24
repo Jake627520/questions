@@ -591,21 +591,37 @@ export async function parseSurveyExcel(
   };
 }
 
+import { QuestionAnalyticsResult } from "./analytics/types";
+
 /**
- * 匯出問卷結果統計與填答明細為 Excel 報表
+ * 匯出問卷結果統計與填答明細為 Excel 報表 (Phase M9-E.3 Multi-Sheet Filter-Aware Export)
  */
 export async function generateSurveyExportExcel(data: {
   survey: { title: string; description?: string | null; version?: number };
+  filterMeta?: {
+    status?: string;
+    timeRange?: string;
+    dateFrom?: string | null;
+    dateTo?: string | null;
+    exportedBy?: string;
+    totalResponses?: number;
+    completedResponses?: number;
+    inProgressResponses?: number;
+  };
   questions: QuestionInput[];
+  questionSummaries?: QuestionAnalyticsResult[];
   responses: Array<{
     id: string;
+    status?: string;
     version?: number;
     submittedAt?: Date | null;
+    createdAt?: Date | null;
     totalScore?: number | null;
     maxScore?: number | null;
     percentage?: number | null;
     answers: Array<{
       questionCode: string;
+      questionTitle?: string;
       rawValue: any;
       otherText?: string | null;
       score?: number | null;
@@ -616,13 +632,69 @@ export async function generateSurveyExportExcel(data: {
   workbook.creator = "Survey System MVP";
   workbook.created = new Date();
 
-  // Sheet 1: 填答明細 (Responses Detail)
-  const detailSheet = workbook.addWorksheet("填答明細");
+  const total = data.filterMeta?.totalResponses ?? data.responses.length;
+  const completed = data.filterMeta?.completedResponses ?? data.responses.filter((r) => r.status === "COMPLETED").length;
+  const inProgress = data.filterMeta?.inProgressResponses ?? data.responses.filter((r) => r.status === "IN_PROGRESS").length;
+
+  // ==========================================
+  // Sheet 1: Export Meta (匯出資訊與篩選條件)
+  // ==========================================
+  const metaSheet = workbook.addWorksheet("匯出資訊 (Meta)");
+  metaSheet.columns = [
+    { header: "統計項目 (Property)", key: "prop", width: 28 },
+    { header: "內容值 (Value)", key: "val", width: 50 },
+  ];
+  metaSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  metaSheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF1E293B" }, // Slate 800
+  };
+
+  const statusLabel =
+    data.filterMeta?.status === "COMPLETED"
+      ? "已完成 (COMPLETED)"
+      : data.filterMeta?.status === "IN_PROGRESS"
+      ? "填寫中 (IN_PROGRESS)"
+      : "全部作答 (ALL)";
+
+  const timeRangeLabel =
+    data.filterMeta?.timeRange === "today"
+      ? "今日 (today)"
+      : data.filterMeta?.timeRange === "7d"
+      ? "近 7 日 (7d)"
+      : data.filterMeta?.timeRange === "30d"
+      ? "近 30 日 (30d)"
+      : data.filterMeta?.timeRange === "custom"
+      ? `自訂區間 (${data.filterMeta?.dateFrom || "-"} ~ ${data.filterMeta?.dateTo || "-"})`
+      : "全時段 (all)";
+
+  metaSheet.addRow({ prop: "問卷名稱 (Survey Title)", val: data.survey.title });
+  metaSheet.addRow({ prop: "問卷版本 (Version)", val: `v${data.survey.version || 1}` });
+  metaSheet.addRow({ prop: "匯出時間 (Export Timestamp)", val: new Date().toLocaleString("zh-TW") });
+  metaSheet.addRow({ prop: "匯出操作者 (Exported By)", val: data.filterMeta?.exportedBy || "系統使用者" });
+  metaSheet.addRow({ prop: "狀態篩選條件 (Status Filter)", val: statusLabel });
+  metaSheet.addRow({ prop: "時間範圍條件 (Time Range)", val: timeRangeLabel });
+  metaSheet.addRow({ prop: "符合篩選之總填答數 (Total Responses)", val: total });
+  metaSheet.addRow({ prop: "已完成填答數 (Completed)", val: completed });
+  metaSheet.addRow({ prop: "填寫中草稿數 (In Progress)", val: inProgress });
+  metaSheet.addRow({
+    prop: "整體完成率 (Completion Rate)",
+    val: total > 0 ? `${Math.round((completed / total) * 1000) / 10}%` : "0%",
+  });
+  metaSheet.addRow({ prop: "題目總數 (Question Count)", val: data.questions.length });
+
+  // ==========================================
+  // Sheet 2: Responses (填答總覽)
+  // ==========================================
+  const detailSheet = workbook.addWorksheet("填答總覽 (Responses)");
 
   const detailCols: Array<{ header: string; key: string; width: number }> = [
     { header: "Response ID", key: "response_id", width: 25 },
+    { header: "填答狀態", key: "status", width: 14 },
     { header: "版本 (Version)", key: "version", width: 14 },
-    { header: "提交時間", key: "submitted_at", width: 22 },
+    { header: "開始填寫時間", key: "created_at", width: 22 },
+    { header: "提交完成時間", key: "submitted_at", width: 22 },
     { header: "總得分 (Total Score)", key: "total_score", width: 18 },
     { header: "最高滿分 (Max Score)", key: "max_score", width: 18 },
     { header: "得分率 (%)", key: "percentage", width: 14 },
@@ -655,17 +727,19 @@ export async function generateSurveyExportExcel(data: {
   detailSheet.getRow(1).fill = {
     type: "pattern",
     pattern: "solid",
-    fgColor: { argb: "FF2563EB" },
+    fgColor: { argb: "FF2563EB" }, // Blue 600
   };
 
   data.responses.forEach((resp) => {
     const row: any = {
       response_id: resp.id,
+      status: resp.status === "COMPLETED" ? "已完成" : resp.status === "IN_PROGRESS" ? "填寫中" : "已提交",
       version: resp.version || 1,
+      created_at: resp.createdAt ? new Date(resp.createdAt).toLocaleString("zh-TW") : "-",
       submitted_at: resp.submittedAt ? new Date(resp.submittedAt).toLocaleString("zh-TW") : "未提交",
-      total_score: resp.totalScore !== null ? resp.totalScore : "不計分",
-      max_score: resp.maxScore !== null ? resp.maxScore : "-",
-      percentage: resp.percentage !== null ? `${resp.percentage}%` : "-",
+      total_score: resp.totalScore !== null && resp.totalScore !== undefined ? resp.totalScore : "不計分",
+      max_score: resp.maxScore !== null && resp.maxScore !== undefined ? resp.maxScore : "-",
+      percentage: resp.percentage !== null && resp.percentage !== undefined ? `${resp.percentage}%` : "-",
     };
 
     const ansMap = new Map<string, any>();
@@ -685,7 +759,7 @@ export async function generateSurveyExportExcel(data: {
           row[`other_${q.code}`] = a.otherText || "";
         }
         if (q.scoringEnabled) {
-          row[`score_${q.code}`] = a.score !== null ? a.score : "不計分";
+          row[`score_${q.code}`] = a.score !== null && a.score !== undefined ? a.score : "不計分";
         }
       } else {
         row[`raw_${q.code}`] = "(條件隱藏/未作答)";
@@ -697,7 +771,137 @@ export async function generateSurveyExportExcel(data: {
     detailSheet.addRow(row);
   });
 
-  // Sheet 2: 題目與選項總覽
+  // ==========================================
+  // Sheet 3: Answers (逐筆作答明細)
+  // ==========================================
+  const answersSheet = workbook.addWorksheet("作答明細 (Answers)");
+  answersSheet.columns = [
+    { header: "Response ID", key: "response_id", width: 25 },
+    { header: "填答狀態", key: "status", width: 14 },
+    { header: "題號", key: "order_num", width: 10 },
+    { header: "題目代碼", key: "code", width: 16 },
+    { header: "題目名稱", key: "title", width: 35 },
+    { header: "題型", key: "question_type", width: 16 },
+    { header: "原始作答內容", key: "raw_value", width: 35 },
+    { header: "其他補充說明", key: "other_text", width: 25 },
+    { header: "題得分", key: "score", width: 12 },
+    { header: "作答狀態", key: "answer_status", width: 16 },
+  ];
+  answersSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  answersSheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF4F46E5" }, // Indigo 600
+  };
+
+  data.responses.forEach((resp) => {
+    const ansMap = new Map<string, any>();
+    resp.answers.forEach((a) => ansMap.set(a.questionCode, a));
+
+    data.questions.forEach((q) => {
+      const a = ansMap.get(q.code);
+      let rawValStr = "-";
+      let otherTextStr = "";
+      let scoreVal: any = "-";
+      let answerStatus = "未作答/條件隱藏";
+
+      if (a && a.rawValue !== null && a.rawValue !== undefined && a.rawValue !== "") {
+        let displayVal = a.rawValue;
+        if (Array.isArray(displayVal)) {
+          displayVal = displayVal.join(", ");
+        }
+        rawValStr = String(displayVal);
+        otherTextStr = a.otherText || "";
+        scoreVal = a.score !== null && a.score !== undefined ? a.score : "不計分";
+        answerStatus = "有效作答";
+      }
+
+      answersSheet.addRow({
+        response_id: resp.id,
+        status: resp.status === "COMPLETED" ? "已完成" : resp.status === "IN_PROGRESS" ? "填寫中" : "已提交",
+        order_num: q.orderNum,
+        code: q.code,
+        title: q.title,
+        question_type: q.questionType,
+        raw_value: rawValStr,
+        other_text: otherTextStr,
+        score: scoreVal,
+        answer_status: answerStatus,
+      });
+    });
+  });
+
+  // ==========================================
+  // Sheet 4: Question Summary (題目統計摘要)
+  // ==========================================
+  const summarySheet = workbook.addWorksheet("題目統計摘要 (Summary)");
+  summarySheet.columns = [
+    { header: "題號", key: "order_num", width: 10 },
+    { header: "題目代碼", key: "code", width: 16 },
+    { header: "題目名稱", key: "title", width: 35 },
+    { header: "題型", key: "question_type", width: 16 },
+    { header: "有效作答數", key: "answered_count", width: 14 },
+    { header: "未作答數", key: "unanswered_count", width: 14 },
+    { header: "作答率 (%)", key: "answer_rate", width: 14 },
+    { header: "指標與選項分佈摘要", key: "summary_detail", width: 55 },
+  ];
+  summarySheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  summarySheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF0D9488" }, // Teal 600
+  };
+
+  const summaryList = data.questionSummaries || [];
+  const summaryMap = new Map<string, any>();
+  summaryList.forEach((s) => summaryMap.set(s.code, s));
+
+  data.questions.forEach((q) => {
+    const s = summaryMap.get(q.code);
+    let answeredCount = s ? s.answeredCount : 0;
+    let unansweredCount = s ? s.unansweredCount : total;
+    let answerRate = s ? `${s.answerRate}%` : "0%";
+    let summaryDetail = "";
+
+    if (s) {
+      const dist = s.distribution || s.optionDistribution;
+      if (dist && dist.length > 0) {
+        summaryDetail = dist
+          .map((opt: any) => `${opt.label}: ${opt.count}次 (${opt.percentage}%)`)
+          .join(" | ");
+      } else if (s.statistics) {
+        const num = s.statistics;
+        const meanStr = num.mean !== null && num.mean !== undefined ? `平均: ${num.mean}` : "平均: -";
+        const medStr = num.median !== null && num.median !== undefined ? `中位數: ${num.median}` : "中位數: -";
+        const rangeStr =
+          num.min !== null && num.min !== undefined && num.max !== null && num.max !== undefined
+            ? `區間: [${num.min}, ${num.max}]`
+            : "區間: -";
+        const sdStr =
+          num.standardDeviation !== null && num.standardDeviation !== undefined
+            ? `標準差: ${num.standardDeviation}`
+            : "標準差: 無 (N<2)";
+        summaryDetail = `樣本數 N=${num.count ?? num.n} | ${meanStr} | ${medStr} | ${rangeStr} | ${sdStr}`;
+      } else if (q.questionType === "text") {
+        summaryDetail = `有效文字填答數: ${answeredCount} 筆`;
+      }
+    }
+
+    summarySheet.addRow({
+      order_num: q.orderNum,
+      code: q.code,
+      title: q.title,
+      question_type: q.questionType,
+      answered_count: answeredCount,
+      unanswered_count: unansweredCount,
+      answer_rate: answerRate,
+      summary_detail: summaryDetail || "-",
+    });
+  });
+
+  // ==========================================
+  // Sheet 5: 題目與選項設定 (結構定義)
+  // ==========================================
   const qSheet = workbook.addWorksheet("題目與選項設定");
   qSheet.columns = [
     { header: "題目代碼", key: "code", width: 14 },
@@ -719,7 +923,7 @@ export async function generateSurveyExportExcel(data: {
   qSheet.getRow(1).fill = {
     type: "pattern",
     pattern: "solid",
-    fgColor: { argb: "FF059669" },
+    fgColor: { argb: "FF059669" }, // Emerald 600
   };
 
   data.questions.forEach((q) => {
