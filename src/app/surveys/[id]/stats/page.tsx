@@ -20,6 +20,12 @@ import {
   TableProperties,
   Layers,
   ShieldCheck,
+  CheckCircle,
+  Clock,
+  PieChart,
+  Hash,
+  FileText,
+  Filter,
 } from "lucide-react";
 
 interface ChoiceDistribution {
@@ -35,11 +41,13 @@ interface ChoiceDistribution {
 
 interface QuestionStatistics {
   n: number;
+  count: number;
   mean: number;
   median: number;
   min: number;
   max: number;
   standardDeviation: number | null;
+  distributionSignal?: "NORMAL" | "POLARIZED";
 }
 
 interface QuestionAnalyticsItem {
@@ -53,10 +61,19 @@ interface QuestionAnalyticsItem {
   scoringEnabled: boolean;
   totalResponses: number;
   answeredCount: number;
-  notAnsweredCount: number;
-  responseRate: number;
+  unansweredCount: number;
+  answerRate: number;
+  unansweredRate: number;
   distribution: ChoiceDistribution[] | null;
+  optionDistribution?: ChoiceDistribution[] | null;
   statistics: QuestionStatistics | null;
+}
+
+interface AnalyticsSummary {
+  totalResponses: number;
+  completedResponses: number;
+  inProgressResponses: number;
+  questionCount: number;
 }
 
 interface AnalyticsData {
@@ -66,10 +83,13 @@ interface AnalyticsData {
     version: number;
     organizationId: string;
   };
-  summary: {
-    totalResponses: number;
-    questionCount: number;
+  filter: {
+    timeRange: string;
+    dateFrom: string | null;
+    dateTo: string | null;
+    status: string;
   };
+  summary: AnalyticsSummary;
   questions: QuestionAnalyticsItem[];
 }
 
@@ -114,6 +134,15 @@ interface CrosstabData {
   }[];
 }
 
+const QUESTION_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
+  single_choice: { label: "單選題", bg: "bg-blue-50 border-blue-200/60", text: "text-blue-700" },
+  multiple_choice: { label: "多選題", bg: "bg-indigo-50 border-indigo-200/60", text: "text-indigo-700" },
+  yes_no: { label: "是非題", bg: "bg-emerald-50 border-emerald-200/60", text: "text-emerald-700" },
+  number: { label: "數值題", bg: "bg-amber-50 border-amber-200/60", text: "text-amber-700" },
+  text: { label: "問答題", bg: "bg-slate-100 border-slate-200/60", text: "text-slate-700" },
+  info: { label: "引導頁", bg: "bg-purple-50 border-purple-200/60", text: "text-purple-700" },
+};
+
 export default function SurveyStatsPage() {
   const params = useParams();
   const id = params.id as string;
@@ -122,6 +151,7 @@ export default function SurveyStatsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<"all" | "today" | "7d" | "30d">("all");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "COMPLETED" | "IN_PROGRESS">("ALL");
 
   // Crosstab State
   const [qAId, setQAId] = useState<string>("");
@@ -134,7 +164,9 @@ export default function SurveyStatsPage() {
     async function fetchStats() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/surveys/${id}/analytics/questions?timeRange=${timeRange}`);
+        const res = await fetch(
+          `/api/surveys/${id}/analytics/questions?timeRange=${timeRange}&status=${statusFilter}`
+        );
         const json = await res.json();
         if (json.survey) {
           setData(json);
@@ -151,7 +183,7 @@ export default function SurveyStatsPage() {
       }
     }
     if (id) fetchStats();
-  }, [id, timeRange]);
+  }, [id, timeRange, statusFilter]);
 
   useEffect(() => {
     async function fetchCrosstab() {
@@ -178,33 +210,37 @@ export default function SurveyStatsPage() {
     }
   }, [id, activeTab, qAId, qBId, timeRange]);
 
-  if (loading) {
+  if (loading && !data) {
     return (
-      <div className="p-16 text-center text-slate-500 bg-white rounded-2xl border border-slate-200 shadow-xs max-w-5xl mx-auto">
-        <div className="animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-3" />
-        載入統計分析資料中...
+      <div className="p-16 text-center text-slate-500 bg-white rounded-2xl border border-slate-200 shadow-xs max-w-5xl mx-auto my-8">
+        <div className="animate-spin w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full mx-auto mb-3" />
+        <p className="text-sm font-medium text-slate-600">載入問卷統計分析資料中...</p>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="p-16 text-center text-slate-500 bg-white rounded-2xl border border-slate-200 shadow-xs max-w-5xl mx-auto">
+      <div className="p-16 text-center text-slate-500 bg-white rounded-2xl border border-slate-200 shadow-xs max-w-5xl mx-auto my-8">
         找不到該問卷統計資料或您無權查看。
       </div>
     );
   }
 
   const { survey, summary, questions } = data;
+  const total = summary.totalResponses || 0;
+  const completed = summary.completedResponses || 0;
+  const inProgress = summary.inProgressResponses || 0;
+  const completionRate = total > 0 ? Math.round((completed / total) * 1000) / 10 : 0;
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto py-4">
+    <div className="space-y-8 max-w-5xl mx-auto py-6 px-4">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 mb-2 transition"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 mb-2 transition font-medium"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>返回問卷工作區</span>
@@ -213,12 +249,12 @@ export default function SurveyStatsPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               {survey.title}
             </h1>
-            <span className="text-xs font-mono font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md">
+            <span className="text-xs font-mono font-bold px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-md border border-slate-200">
               v{survey.version}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Enterprise Survey Analytics & Intelligence (單題分佈與 2-Way 雙題目交叉分析)
+            Enterprise Survey Analytics & Intelligence（單題作答指標與雙題交叉分析）
           </p>
         </div>
 
@@ -239,8 +275,51 @@ export default function SurveyStatsPage() {
         </div>
       </div>
 
-      {/* Tabs & Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+      {/* Survey Overview KPI Cards (Layer 1) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Total Responses */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>總填答數 (Total)</span>
+            <Users className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="text-2xl font-black text-slate-900">{total.toLocaleString()}</div>
+          <div className="text-[11px] text-slate-400">符合篩選條件之母體</div>
+        </div>
+
+        {/* Completed Responses */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>已完成 (Completed)</span>
+            <CheckCircle className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="text-2xl font-black text-emerald-600">{completed.toLocaleString()}</div>
+          <div className="text-[11px] text-slate-400">已完整提交問卷</div>
+        </div>
+
+        {/* In Progress */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>填寫中 (In Progress)</span>
+            <Clock className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="text-2xl font-black text-amber-600">{inProgress.toLocaleString()}</div>
+          <div className="text-[11px] text-slate-400">草稿暫存階段</div>
+        </div>
+
+        {/* Completion Rate */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>完成率 (Rate)</span>
+            <Percent className="w-4 h-4 text-indigo-600" />
+          </div>
+          <div className="text-2xl font-black text-indigo-600">{completionRate}%</div>
+          <div className="text-[11px] text-slate-400">已完成佔比</div>
+        </div>
+      </div>
+
+      {/* Tabs & Multi-Dimensional Filter Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         {/* Navigation Tabs */}
         <div className="flex items-center gap-2">
           <button
@@ -252,7 +331,7 @@ export default function SurveyStatsPage() {
             }`}
           >
             <BarChart3 className="w-4 h-4" />
-            <span>題目統計 (Item Statistics)</span>
+            <span>單題作答分析 (Item Analytics)</span>
           </button>
           <button
             onClick={() => setActiveTab("crosstab")}
@@ -267,41 +346,67 @@ export default function SurveyStatsPage() {
           </button>
         </div>
 
-        {/* Time Range Selector */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-          {(
-            [
-              { key: "all", label: "全時段" },
-              { key: "30d", label: "近 30 日" },
-              { key: "7d", label: "近 7 日" },
-              { key: "today", label: "今日" },
-            ] as const
-          ).map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTimeRange(t.key)}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
-                timeRange === t.key
-                  ? "bg-white text-blue-700 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Filters: Status & Time Range */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Status Filter */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+            {(
+              [
+                { key: "ALL", label: "全部作答" },
+                { key: "COMPLETED", label: "已完成" },
+                { key: "IN_PROGRESS", label: "填寫中" },
+              ] as const
+            ).map((s) => (
+              <button
+                key={s.key}
+                onClick={() => setStatusFilter(s.key)}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+                  statusFilter === s.key
+                    ? "bg-white text-slate-900 shadow-xs font-bold"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Time Range Selector */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+            {(
+              [
+                { key: "all", label: "全時段" },
+                { key: "30d", label: "近 30 日" },
+                { key: "7d", label: "近 7 日" },
+                { key: "today", label: "今日" },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTimeRange(t.key)}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+                  timeRange === t.key
+                    ? "bg-white text-blue-700 shadow-xs font-bold"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* TAB 1: Item Statistics */}
+      {/* TAB 1: Question-level Item Analytics */}
       {activeTab === "questions" && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Activity className="w-4 h-4 text-blue-600" />
-              <span>各題作答率、選項分佈與離散指標</span>
+              <span>題目作答率、選項分佈與離散指標 (共 {questions.length} 題)</span>
             </h2>
             <span className="text-xs text-slate-500 font-medium">
-              選項百分比分母明確為該題「有效作答數」
+              * 選項百分比分母為該題「有效作答數」
             </span>
           </div>
 
@@ -310,102 +415,160 @@ export default function SurveyStatsPage() {
               此問卷尚未建立任何題目
             </div>
           ) : (
-            questions.map((q) => (
-              <div
-                key={q.questionId}
-                className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs space-y-5"
-              >
-                {/* Question Header */}
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-100 pb-4">
-                  <div className="space-y-1 max-w-2xl">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono font-bold px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-200/50">
-                        {q.code}
-                      </span>
-                      <h3 className="font-bold text-slate-900 text-base">{q.title}</h3>
-                      {q.required && (
-                        <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200/60">
-                          必填
+            questions.map((q) => {
+              const typeMeta = QUESTION_TYPE_LABELS[q.type] || {
+                label: q.type,
+                bg: "bg-slate-100 border-slate-200",
+                text: "text-slate-700",
+              };
+              const isPolarized = q.statistics?.distributionSignal === "POLARIZED";
+
+              return (
+                <div
+                  key={q.questionId}
+                  className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs space-y-5"
+                >
+                  {/* Question Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                    <div className="space-y-1.5 max-w-2xl">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 bg-slate-900 text-white rounded-md">
+                          {q.code}
                         </span>
+                        <span
+                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${typeMeta.bg} ${typeMeta.text}`}
+                        >
+                          {typeMeta.label}
+                        </span>
+                        {q.required && (
+                          <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200/60">
+                            必填
+                          </span>
+                        )}
+                        {isPolarized && (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-600" />
+                            分佈兩極化 (Heuristic Signal)
+                          </span>
+                        )}
+                        <h3 className="font-bold text-slate-900 text-base">{q.title}</h3>
+                      </div>
+                      {q.description && (
+                        <p className="text-xs text-slate-500 pl-0.5">{q.description}</p>
                       )}
                     </div>
-                    {q.description && (
-                      <p className="text-xs text-slate-500 pl-0.5">{q.description}</p>
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-3 shrink-0 text-xs">
-                    <div className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/70 space-x-2">
-                      <span className="text-slate-500">作答率：</span>
-                      <strong className="text-blue-700 font-bold">{q.responseRate}%</strong>
-                      <span className="text-slate-300">|</span>
-                      <span className="text-slate-500">有效：<strong>{q.answeredCount}</strong> 筆</span>
-                      <span className="text-slate-300">|</span>
-                      <span className="text-slate-400">未填：{q.notAnsweredCount} 筆</span>
+                    {/* Answered / Unanswered Rate Indicator */}
+                    <div className="flex items-center gap-3 shrink-0 text-xs">
+                      <div className="bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/70 flex items-center gap-3">
+                        <div>
+                          <span className="text-slate-500 mr-1">有效作答:</span>
+                          <strong className="text-blue-700 font-black">{q.answeredCount}</strong>
+                          <span className="text-slate-400 font-mono ml-1">({q.answerRate}%)</span>
+                        </div>
+                        <span className="text-slate-200">|</span>
+                        <div>
+                          <span className="text-slate-500 mr-1">未作答:</span>
+                          <strong className="text-slate-700 font-bold">{q.unansweredCount}</strong>
+                          <span className="text-slate-400 font-mono ml-1">({q.unansweredRate}%)</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Multiple Choice Disclaimer */}
+                  {q.type === "multiple_choice" && (
+                    <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl px-3.5 py-2 text-[11px] text-indigo-700 flex items-center gap-1.5 font-medium">
+                      <HelpCircle className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
+                      <span>
+                        多選題各選項百分比以有效填答人數為分母計算，各項佔比總和可能大於 100% (Percentages may total more than 100%)。
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Rating / Numeric Descriptive Statistics Card */}
+                  {q.statistics && (
+                    <div className="bg-gradient-to-r from-purple-50/70 to-indigo-50/60 border border-purple-100 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex items-center gap-2 text-xs font-bold text-purple-900">
+                        <Sparkles className="w-4 h-4 text-purple-600" />
+                        <span>數值與評分統計 (有效樣本 N = {q.statistics.n})</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-5 text-xs">
+                        <div className="text-slate-700">
+                          平均數 (Mean)：
+                          <strong className="text-purple-900 font-black text-sm ml-1">
+                            {q.statistics.mean}
+                          </strong>
+                        </div>
+                        <div className="text-slate-700">
+                          中位數 (Median)：
+                          <strong className="text-blue-900 font-bold ml-1">
+                            {q.statistics.median}
+                          </strong>
+                        </div>
+                        <div className="text-slate-700">
+                          極值區間：
+                          <strong className="text-slate-900 font-mono ml-1">
+                            [{q.statistics.min}, {q.statistics.max}]
+                          </strong>
+                        </div>
+                        <div className="text-slate-700">
+                          樣本標準差 (s)：
+                          <strong className="text-indigo-900 font-bold ml-1">
+                            {q.statistics.standardDeviation !== null
+                              ? q.statistics.standardDeviation
+                              : "無 (N < 2)"}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Option Distribution Bars */}
+                  {q.distribution && q.distribution.length > 0 && (
+                    <div className="space-y-3 pt-1">
+                      {q.distribution.map((c) => (
+                        <div key={c.choiceId} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-medium">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-800 font-semibold">{c.label}</span>
+                              {c.scoreEnabled && (
+                                <span className="text-indigo-600 font-bold text-[11px] bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100">
+                                  {c.score !== null ? `${c.score} 分` : "不計分"}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-slate-500 font-mono text-xs">
+                              {c.count} 次 (<strong className="text-slate-900 font-bold">{c.percentage}%</strong>)
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                            <div
+                              className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(100, c.percentage)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Text Question Hint */}
+                  {q.type === "text" && (
+                    <div className="bg-slate-50 border border-slate-200/70 rounded-xl p-4 text-xs text-slate-500 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-slate-400" />
+                        <span>問答題提供作答率與未填率統計，零假造 NLP / AI 數據。</span>
+                      </div>
+                      <span className="font-semibold text-slate-700">
+                        有效回覆共 {q.answeredCount} 筆
+                      </span>
+                    </div>
+                  )}
                 </div>
-
-                {/* Rating / Number Statistics */}
-                {q.statistics && (
-                  <div className="bg-purple-50/60 border border-purple-100 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-2 text-xs font-bold text-purple-900">
-                      <Sparkles className="w-4 h-4 text-purple-600" />
-                      <span>評分統計分析 (N = {q.statistics.n})：</span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-4 text-xs">
-                      <div className="text-slate-700">
-                        平均數：<strong className="text-purple-800 font-bold">{q.statistics.mean}</strong>
-                      </div>
-                      <div className="text-slate-700">
-                        中位數：<strong className="text-blue-800 font-bold">{q.statistics.median}</strong>
-                      </div>
-                      <div className="text-slate-700">
-                        極值：<strong>{q.statistics.min} / {q.statistics.max}</strong>
-                      </div>
-                      <div className="text-slate-700">
-                        樣本標準差 (s)：
-                        <strong className="text-indigo-800 font-bold">
-                          {q.statistics.standardDeviation !== null
-                            ? `${q.statistics.standardDeviation}`
-                            : "無 (N < 2)"}
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Choice Distribution Bars */}
-                {q.distribution && q.distribution.length > 0 && (
-                  <div className="space-y-3 pt-1">
-                    {q.distribution.map((c) => (
-                      <div key={c.choiceId} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs font-medium">
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-800 font-semibold">{c.label}</span>
-                            {c.scoreEnabled && (
-                              <span className="text-indigo-600 font-bold text-[11px]">
-                                ({c.score !== null ? `${c.score} 分` : "不計分"})
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-slate-500 font-mono text-[11px]">
-                            {c.count} 次 (<strong className="text-slate-800">{c.percentage}%</strong>)
-                          </div>
-                        </div>
-                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                          <div
-                            className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(100, c.percentage)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
