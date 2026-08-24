@@ -4,9 +4,59 @@ import Link from "next/link";
 import { FileSpreadsheet, LayoutGrid, Settings, PlusCircle } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://questions-survey-system1.vercel.app";
+
 export const metadata: Metadata = {
-  title: "問卷系統 MVP (Survey System)",
-  description: "支援 Excel 題庫匯入、靈活計分與統計分析的問卷系統",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "企業級智慧問卷與統計分析平台 (Survey System)",
+    template: "%s | 問卷系統",
+  },
+  description: "支援 Excel 題庫無損匯入、靈活邏輯跳題、加權計分、2-Way 交叉分析、卡方獨立性檢定與去識別化隱私防護的企業級問卷平台",
+  applicationName: "Survey System MVP",
+  keywords: [
+    "問卷系統",
+    "Survey System",
+    "Excel題庫匯入",
+    "交叉分析",
+    "卡方檢定",
+    "Cross-tabulation",
+    "Chi-Square",
+    "隱私抑制",
+    "去識別化",
+    "統計分析",
+  ],
+  authors: [{ name: "Survey Platform Team" }],
+  creator: "Survey Platform Team",
+  publisher: "Survey Platform Enterprise",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  alternates: {
+    canonical: siteUrl,
+  },
+  openGraph: {
+    type: "website",
+    locale: "zh_TW",
+    url: siteUrl,
+    title: "企業級智慧問卷與統計分析平台 (Survey System)",
+    description: "支援 Excel 題庫無損匯入、靈活邏輯跳題、加權計分、2-Way 交叉分析、卡方獨立性檢定與去識別化隱私防護的企業級問卷平台",
+    siteName: "問卷系統 MVP (Survey System)",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "企業級智慧問卷與統計分析平台 (Survey System)",
+    description: "支援 Excel 題庫無損匯入、靈活邏輯跳題、加權計分、2-Way 交叉分析、卡方獨立性檢定與去識別化隱私防護的企業級問卷平台",
+    creator: "@surveysystem",
+  },
 };
 
 export default function RootLayout({
