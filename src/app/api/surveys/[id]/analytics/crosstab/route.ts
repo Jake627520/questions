@@ -9,11 +9,23 @@ import {
   forbiddenResponse,
   getUserMembership,
 } from "@/lib/auth";
-import { sanitizeCrosstabMatrix } from "@/lib/crosstab-privacy";
+import {
+  analyzeCrossTabulation,
+  analyzeCrossTabStatistics,
+  applyCrossTabPrivacy,
+  QuestionMeta,
+  CrossTabStatistics,
+} from "@/lib/analytics";
 
 /**
  * GET /api/surveys/[id]/analytics/crosstab
- * 2-Way 交叉分析與分群聚合矩陣端點 (Cross-tabulation & Demographic Segmentation Matrix)
+ * Phase M9-F.4: 2-Way 交叉分析 API 端點與租戶/RBAC 邊界控制
+ *
+ * 核心規範：
+ * 1. 完整認證與 RBAC：未登入 401、跨組織 403、不存在 404。
+ * 2. 多租戶隔離：題目必須屬於該問卷，拒絕跨問卷 IDOR 探測。
+ * 3. 乾淨純函數管線：DB 篩選 -> F.1 交叉聚合 -> F.2 統計檢定 -> F.3 隱私遮蔽 -> API DTO。
+ * 4. 嚴格伺服端隱私防護：minCellSize 強制 >= 5，不洩漏任何個體作答 ID 或原始資料。
  */
 export async function GET(
   req: NextRequest,
@@ -33,7 +45,9 @@ export async function GET(
     const questionParamKeys = allQueryKeys.filter(
       (k) =>
         k.toLowerCase().startsWith("question") ||
-        k.toLowerCase().startsWith("dim")
+        k.toLowerCase().startsWith("dim") ||
+        k.toLowerCase().includes("rowquestion") ||
+        k.toLowerCase().includes("colquestion")
     );
     if (questionParamKeys.length > 2) {
       return NextResponse.json(
@@ -45,20 +59,24 @@ export async function GET(
       );
     }
 
-    const questionAId = searchParams.get("questionA");
-    const questionBId = searchParams.get("questionB");
+    const rowQuestionId =
+      searchParams.get("rowQuestionId") || searchParams.get("questionA");
+    const colQuestionId =
+      searchParams.get("colQuestionId") ||
+      searchParams.get("columnQuestionId") ||
+      searchParams.get("questionB");
 
-    if (!questionAId || !questionBId) {
+    if (!rowQuestionId || !colQuestionId) {
       return NextResponse.json(
         {
           error: "MISSING_DIMENSIONS",
-          message: "請指定分組題目 questionA 與目標題目 questionB。",
+          message: "請指定分組題目 rowQuestionId 與目標題目 colQuestionId。",
         },
         { status: 400 }
       );
     }
 
-    if (questionAId === questionBId) {
+    if (rowQuestionId === colQuestionId) {
       return NextResponse.json(
         {
           error: "SAME_DIMENSION",
@@ -73,14 +91,11 @@ export async function GET(
     const dateToParam = searchParams.get("dateTo");
     const statusParam = searchParams.get("status") || "ALL";
 
-    // 2. 查詢問卷與兩題目結構
+    // 2. 查詢問卷基本資訊與題目結構
     const survey = await db.survey.findUnique({
       where: { id },
       include: {
         questions: {
-          where: {
-            id: { in: [questionAId, questionBId] },
-          },
           include: {
             choices: {
               orderBy: { orderNum: "asc" },
@@ -104,8 +119,8 @@ export async function GET(
     }
 
     // 4. 驗證兩題目皆屬於該 Survey
-    const qA = survey.questions.find((q) => q.id === questionAId);
-    const qB = survey.questions.find((q) => q.id === questionBId);
+    const qA = survey.questions.find((q) => q.id === rowQuestionId);
+    const qB = survey.questions.find((q) => q.id === colQuestionId);
 
     if (!qA || !qB) {
       return NextResponse.json(
@@ -120,43 +135,47 @@ export async function GET(
     let endDate: Date | undefined;
 
     if (timeRange === "today") {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
       endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     } else if (timeRange === "7d") {
       startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      startDate.setHours(0, 0, 0, 0);
     } else if (timeRange === "30d") {
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    } else if (timeRange === "custom") {
-      if (dateFromParam) startDate = new Date(dateFromParam);
-      if (dateToParam) endDate = new Date(dateToParam);
+      startDate.setHours(0, 0, 0, 0);
+    } else if (timeRange === "custom" && dateFromParam) {
+      startDate = new Date(dateFromParam);
+      if (dateToParam) {
+        endDate = new Date(dateToParam);
+        endDate.setHours(23, 59, 59, 999);
+      }
     }
 
-    const whereResponse: any = {
+    const responseWhere: any = {
       surveyId: survey.id,
     };
     if (statusParam === "COMPLETED") {
-      whereResponse.status = ResponseStatus.COMPLETED;
+      responseWhere.status = ResponseStatus.COMPLETED;
     } else if (statusParam === "IN_PROGRESS") {
-      whereResponse.status = ResponseStatus.IN_PROGRESS;
+      responseWhere.status = ResponseStatus.IN_PROGRESS;
     }
     if (startDate || endDate) {
-      whereResponse.createdAt = {};
-      if (startDate) whereResponse.createdAt.gte = startDate;
-      if (endDate) whereResponse.createdAt.lte = endDate;
+      responseWhere.createdAt = {};
+      if (startDate) responseWhere.createdAt.gte = startDate;
+      if (endDate) responseWhere.createdAt.lte = endDate;
     }
 
-    // 6. 查詢總 Responses 與這兩題的所有 Answers
+    // 6. 查詢符合條件之 Responses 與其 Answers
     const responses = await db.response.findMany({
-      where: whereResponse,
+      where: responseWhere,
       select: {
         id: true,
+        status: true,
         answers: {
-          where: {
-            questionId: { in: [qA.id, qB.id] },
-          },
           select: {
             questionId: true,
             rawValue: true,
+            score: true,
           },
         },
       },
@@ -164,92 +183,162 @@ export async function GET(
 
     const totalSurveyResponses = responses.length;
 
-    // 7. 解析作答資料並計算交叉矩陣
-    const parseAnswerValues = (rawValue: string): string[] => {
-      if (!rawValue || rawValue.trim() === "") return [];
-      try {
-        const parsed = JSON.parse(rawValue);
-        if (Array.isArray(parsed)) return parsed.map((x) => String(x).trim()).filter(Boolean);
-        if (parsed !== null && parsed !== undefined && String(parsed).trim() !== "")
-          return [String(parsed).trim()];
-      } catch {
-        const trimmed = rawValue.trim();
-        if (trimmed !== "" && trimmed !== "null") return [trimmed];
-      }
-      return [];
-    };
+    // 7. 轉換題目資料為純函數領域結構 (QuestionMeta)
+    const toQuestionMeta = (q: typeof qA): QuestionMeta => ({
+      id: q.id,
+      code: q.code,
+      orderNum: q.orderNum,
+      title: q.title,
+      description: q.description,
+      questionType: q.questionType,
+      required: q.required,
+      scoringEnabled: q.scoringEnabled,
+      reverseScore: q.reverseScore,
+      choices: q.choices.map((c) => ({
+        id: c.id,
+        orderNum: c.orderNum,
+        label: c.label,
+        value: c.value,
+        scoreEnabled: c.scoreEnabled,
+        score: c.score,
+      })),
+    });
 
-    const getChoiceIdForVal = (q: typeof qA, val: string): string | null => {
-      const match = q.choices.find((c) => c.value === val || c.id === val || c.label === val);
-      return match ? match.id : null;
-    };
+    const qRowMeta = toQuestionMeta(qA);
+    const qColMeta = toQuestionMeta(qB);
 
-    const rawMatrix: Record<string, Record<string, number>> = {};
-    const rowTotals: Record<string, number> = {};
-    const colTotals: Record<string, number> = {};
+    // 8. 執行純函數分析管線 (F.1 -> F.2 -> F.3)
+    // 8.1 Phase M9-F.1: 交叉聚合純函數運算
+    const crossTabRaw = analyzeCrossTabulation(qRowMeta, qColMeta, responses);
 
-    let bothAnsweredCount = 0;
+    // 8.2 Phase M9-F.2: 統計檢定計算 (χ², p-value, Cramer's V)
+    const includeStatistics = searchParams.get("includeStatistics") !== "false";
+    let stats: CrossTabStatistics | null = null;
+    if (includeStatistics) {
+      stats = analyzeCrossTabStatistics(crossTabRaw);
+      crossTabRaw.statistics = stats;
+    }
+
+    // 8.3 Phase M9-F.3: 小樣本隱私遮蔽與補償遮蔽投影
+    const minCellSizeParam = parseInt(searchParams.get("minCellSize") || "5", 10);
+    const minCellSize =
+      isNaN(minCellSizeParam) || minCellSizeParam < 5 ? 5 : minCellSizeParam;
+    const protectedCrossTab = applyCrossTabPrivacy(crossTabRaw, { minCellSize });
+
+    // 9. 計算單題作答人數
     let qAAnsweredCount = 0;
     let qBAnsweredCount = 0;
-
     for (const resp of responses) {
       const ansA = resp.answers.find((a) => a.questionId === qA.id);
       const ansB = resp.answers.find((a) => a.questionId === qB.id);
-
-      const valsA = ansA ? parseAnswerValues(ansA.rawValue) : [];
-      const valsB = ansB ? parseAnswerValues(ansB.rawValue) : [];
-
-      const hasA = valsA.length > 0;
-      const hasB = valsB.length > 0;
-
-      if (hasA) qAAnsweredCount++;
-      if (hasB) qBAnsweredCount++;
-
-      if (hasA && hasB) {
-        bothAnsweredCount++;
-
-        const choiceIdsA =
-          qA.choices.length > 0
-            ? (valsA.map((v) => getChoiceIdForVal(qA, v)).filter(Boolean) as string[])
-            : ["val"];
-
-        const choiceIdsB =
-          qB.choices.length > 0
-            ? (valsB.map((v) => getChoiceIdForVal(qB, v)).filter(Boolean) as string[])
-            : ["val"];
-
-        for (const cidA of choiceIdsA) {
-          rowTotals[cidA] = (rowTotals[cidA] || 0) + 1;
-          if (!rawMatrix[cidA]) rawMatrix[cidA] = {};
-
-          for (const cidB of choiceIdsB) {
-            rawMatrix[cidA][cidB] = (rawMatrix[cidA][cidB] || 0) + 1;
-          }
-        }
-
-        for (const cidB of choiceIdsB) {
-          colTotals[cidB] = (colTotals[cidB] || 0) + 1;
-        }
-      }
+      if (ansA && ansA.rawValue && ansA.rawValue.trim() !== "" && ansA.rawValue !== "null")
+        qAAnsweredCount++;
+      if (ansB && ansB.rawValue && ansB.rawValue.trim() !== "" && ansB.rawValue !== "null")
+        qBAnsweredCount++;
     }
 
-    // 8. 執行嚴格伺服端隱私遮蔽與差額保護
-    const sanitizedResult = sanitizeCrosstabMatrix({
+    // 10. 建構 DTO 回應 (兼顧標準契約與向後相容欄位)
+    const rows = protectedCrossTab.rowItems.map((rItem, rIdx) => {
+      const choiceA = qA.choices.find((c) => c.value === rItem.value) || {
+        id: rItem.value,
+        label: rItem.label,
+      };
+
+      const cells = protectedCrossTab.colItems.map((cItem, cIdx) => {
+        const choiceB = qB.choices.find((c) => c.value === cItem.value) || {
+          id: cItem.value,
+          label: cItem.label,
+        };
+        const cell = protectedCrossTab.matrix[rIdx][cIdx];
+
+        return {
+          colChoiceId: choiceB.id,
+          colLabel: cItem.label,
+          count: cell.count,
+          displayValue: cell.displayValue,
+          rowPercentage: cell.rowPercentage,
+          columnPercentage: cell.colPercentage,
+          totalPercentage: cell.totalPercentage,
+          isSuppressed: cell.isSuppressed,
+        };
+      });
+
+      return {
+        rowChoiceId: choiceA.id,
+        rowLabel: rItem.label,
+        rowTotalAnswered: rItem.count,
+        isRowTotalSuppressed: rItem.isSuppressed,
+        cells,
+      };
+    });
+
+    const columnTotals = protectedCrossTab.colItems.map((cItem) => {
+      const choiceB = qB.choices.find((c) => c.value === cItem.value) || {
+        id: cItem.value,
+        label: cItem.label,
+      };
+      return {
+        colChoiceId: choiceB.id,
+        colLabel: cItem.label,
+        totalAnswered: cItem.count,
+        isColumnTotalSuppressed: cItem.isSuppressed,
+      };
+    });
+
+    return NextResponse.json({
+      success: true,
+      survey: {
+        id: survey.id,
+        title: survey.title,
+        version: survey.version,
+        organizationId: survey.organizationId,
+        isAnonymous: survey.isAnonymous,
+      },
+      filter: {
+        timeRange,
+        dateFrom: startDate ? startDate.toISOString() : null,
+        dateTo: endDate ? endDate.toISOString() : null,
+        status: statusParam,
+      },
+      result: protectedCrossTab,
+
+      // 向下相容結構
       surveyId: survey.id,
       surveyTitle: survey.title,
       isAnonymous: survey.isAnonymous,
-      qA,
-      qB,
-      rawMatrix,
-      rowTotals,
-      colTotals,
+      minCellSize,
+      dimensionA: {
+        questionId: qA.id,
+        code: qA.code,
+        title: qA.title,
+        type: qA.questionType,
+        totalAnswered: qAAnsweredCount,
+        notAnsweredCount: totalSurveyResponses - qAAnsweredCount,
+        options: qA.choices.map((c) => ({
+          choiceId: c.id,
+          label: c.label,
+          value: c.value,
+        })),
+      },
+      dimensionB: {
+        questionId: qB.id,
+        code: qB.code,
+        title: qB.title,
+        type: qB.questionType,
+        totalAnswered: qBAnsweredCount,
+        notAnsweredCount: totalSurveyResponses - qBAnsweredCount,
+        options: qB.choices.map((c) => ({
+          choiceId: c.id,
+          label: c.label,
+          value: c.value,
+        })),
+      },
+      validPopulation: protectedCrossTab.grandTotal ?? 0,
+      bothAnsweredCount: crossTabRaw.grandTotal,
       totalSurveyResponses,
-      bothAnsweredCount,
-      qAAnsweredCount,
-      qBAnsweredCount,
+      rows,
+      columnTotals,
     });
-
-    return NextResponse.json(sanitizedResult);
   } catch (error: any) {
     console.error("[Crosstab Analytics Error]:", error);
     return NextResponse.json(
