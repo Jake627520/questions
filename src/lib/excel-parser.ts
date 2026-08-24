@@ -42,6 +42,53 @@ export function parseStrictBoolean(
 }
 
 
+export function parseStrictOrderNum(
+  val: any,
+  fieldName: string,
+  rowNum: number,
+  sheet: "questions" | "choices" | "system",
+  issues: ValidationIssue[],
+  errors: string[]
+): number | null {
+  if (val === null || val === undefined || (typeof val === "string" && val.trim() === "")) {
+    const msg = `${sheet} 工作表第 ${rowNum} 列：未填寫排序序號（${fieldName}）`;
+    errors.push(msg);
+    issues.push({
+      code: "REQUIRED_FIELD_EMPTY",
+      severity: "error",
+      sheet,
+      row: rowNum,
+      column: fieldName,
+      field: fieldName,
+      value: "",
+      message: msg,
+      suggestion: "請填寫大於或等於 1 的正整數序號（例如 1, 2, 3）。",
+    });
+    return null;
+  }
+
+  const num = typeof val === "number" ? val : Number(String(val).trim());
+  if (isNaN(num) || !Number.isInteger(num) || num <= 0) {
+    const strVal = String(val).slice(0, 50);
+    const msg = `${sheet} 工作表第 ${rowNum} 列「${fieldName}」欄位的值「${strVal}」不是合法的正整數序號`;
+    errors.push(msg);
+    issues.push({
+      code: "INVALID_ORDER_NUM",
+      severity: "error",
+      sheet,
+      row: rowNum,
+      column: fieldName,
+      field: fieldName,
+      value: strVal,
+      message: msg,
+      suggestion: "請填寫大於或等於 1 的正整數（例如 1, 2, 3）。",
+    });
+    return null;
+  }
+
+  return num;
+}
+
 function parseNumber(val: any): number | null {
   if (val === null || val === undefined || val === "") return null;
   const num = Number(val);
@@ -230,6 +277,8 @@ export async function parseSurveyExcel(
   // 1. 解析 Questions
   const questionsMap = new Map<string, QuestionInput>();
   const questionHeaders: { [key: string]: number } = {};
+  const seenQuestionOrders = new Set<number>();
+  const seenChoiceOrders = new Map<string, Set<number>>();
 
   questionsSheet.getRow(1).eachCell((cell, colNumber) => {
     const header = String(getCellValue(cell) || "").trim().toLowerCase();
@@ -297,7 +346,30 @@ export async function parseSurveyExcel(
       return;
     }
 
-    const orderNum = parseNumber(getVal("order_num")) ?? rowNumber - 1;
+    const hasOrderCol = questionHeaders["order_num"] !== undefined;
+    let orderNum = rowNumber - 1;
+    if (hasOrderCol) {
+      const parsedOrder = parseStrictOrderNum(getVal("order_num"), "order_num", rowNumber, "questions", issues, errors);
+      if (parsedOrder !== null) {
+        if (seenQuestionOrders.has(parsedOrder)) {
+          const msg = `questions 工作表第 ${rowNumber} 列 [${code}]：題目排序序號「${parsedOrder}」重複`;
+          errors.push(msg);
+          issues.push({
+            code: "DUPLICATE_ORDER",
+            severity: "error",
+            sheet: "questions",
+            row: rowNumber,
+            column: "order_num",
+            field: "order_num",
+            value: String(parsedOrder),
+            message: msg,
+            suggestion: "請確保每個題目的 order_num 為唯一且不重複的正整數。",
+          });
+        }
+        seenQuestionOrders.add(parsedOrder);
+        orderNum = parsedOrder;
+      }
+    }
     const description = getVal("description") ? String(getVal("description")).trim() : null;
     if (description && description.length > MAX_CELL_LENGTH) {
       const msg = `第 ${rowNumber} 列 [${code}]：題目說明過長（最多 ${MAX_CELL_LENGTH} 字元）`;
@@ -354,7 +426,7 @@ export async function parseSurveyExcel(
 
     questionsMap.set(code, {
       rowNum: rowNumber,
-      orderNum,
+      orderNum: orderNum ?? rowNumber - 1,
       code,
       title,
       description,
@@ -461,7 +533,32 @@ export async function parseSurveyExcel(
         return;
       }
 
-      const orderNum = parseNumber(getVal("order_num")) ?? (q.choices?.length || 0) + 1;
+      const hasChoiceOrderCol = choiceHeaders["order_num"] !== undefined;
+      let orderNum = (q.choices?.length || 0) + 1;
+      if (hasChoiceOrderCol) {
+        const parsedOrder = parseStrictOrderNum(getVal("order_num"), "order_num", rowNumber, "choices", issues, errors);
+        if (parsedOrder !== null && q) {
+          if (!seenChoiceOrders.has(qCode)) seenChoiceOrders.set(qCode, new Set<number>());
+          const qChoiceOrders = seenChoiceOrders.get(qCode)!;
+          if (qChoiceOrders.has(parsedOrder)) {
+            const msg = `choices 工作表第 ${rowNumber} 列 [${qCode}]：選項排序序號「${parsedOrder}」在題目「${qCode}」中重複`;
+            errors.push(msg);
+            issues.push({
+              code: "DUPLICATE_CHOICE_ORDER",
+              severity: "error",
+              sheet: "choices",
+              row: rowNumber,
+              column: "order_num",
+              field: "order_num",
+              value: String(parsedOrder),
+              message: msg,
+              suggestion: "請確保同一題目下的每個選項 order_num 為唯一且不重複的正整數。",
+            });
+          }
+          qChoiceOrders.add(parsedOrder);
+          orderNum = parsedOrder;
+        }
+      }
       const scoreEnabled = parseStrictBoolean(getVal("score_enabled"), "score_enabled", rowNumber, "choices", issues, errors);
       const score = parseNumber(getVal("score"));
       const isOther = parseStrictBoolean(getVal("is_other"), "is_other", rowNumber, "choices", issues, errors);
@@ -469,7 +566,7 @@ export async function parseSurveyExcel(
       const isNoneOfAbove = parseStrictBoolean(getVal("is_none_of_above"), "is_none_of_above", rowNumber, "choices", issues, errors);
 
       q.choices.push({
-        orderNum,
+        orderNum: orderNum ?? (q.choices?.length || 0) + 1,
         label,
         value,
         scoreEnabled,

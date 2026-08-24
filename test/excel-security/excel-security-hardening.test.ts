@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import ExcelJS from "exceljs";
-import { parseSurveyExcel, hasValidXlsxSignature, parseStrictBoolean } from "@/lib/excel-parser";
+import { NextRequest } from "next/server";
+import { parseSurveyExcel, hasValidXlsxSignature, parseStrictBoolean, parseStrictOrderNum } from "@/lib/excel-parser";
 import { validateQuestionsStructure, detectCircularDependencies } from "@/lib/survey-engine";
+import { POST as importPOST } from "@/app/api/surveys/import/route";
+import { db } from "@/lib/db";
 import { ValidationIssue } from "@/types/surveyImport";
 
 /**
@@ -50,6 +53,7 @@ async function createWorkbookBuffer(options?: {
     },
   ];
 
+  let autoQOrder = 1;
   for (const q of defaultQuestions) {
     qSheet.addRow([
       q.code ?? "Q1",
@@ -65,7 +69,7 @@ async function createWorkbookBuffer(options?: {
       q.max_selections ?? null,
       q.min_value ?? null,
       q.max_value ?? null,
-      q.order_num ?? 1,
+      q.order_num ?? autoQOrder++,
     ]);
   }
 
@@ -89,12 +93,13 @@ async function createWorkbookBuffer(options?: {
     { question_code: "Q2", label: "不滿意", value: "unsat", order_num: 2 },
   ];
 
+  let autoCOrder = 1;
   for (const c of defaultChoices) {
     cSheet.addRow([
       c.question_code ?? "Q1",
       c.label ?? "選項",
       c.value ?? "opt",
-      c.order_num ?? 1,
+      c.order_num ?? autoCOrder++,
       c.score_enabled ?? "FALSE",
       c.score ?? null,
       c.is_other ?? "FALSE",
@@ -399,6 +404,132 @@ describe("Phase M9-E.0: Excel Import Security & Data Integrity Hardening", () =>
     it("長度小於 4 bytes 的緩衝區應安全回傳 false 而不發生崩潰", () => {
       expect(hasValidXlsxSignature(Buffer.from([0x50, 0x4b]))).toBe(false);
       expect(hasValidXlsxSignature(Buffer.from([]))).toBe(false);
+    });
+  });
+
+  // =========================================================================
+  // 5. Strict Order Number Validation & Duplicate Detection (P1 Hardening)
+  // =========================================================================
+  describe("5. Strict Order Number Validation & Duplicate Detection (P1 Hardening)", () => {
+    it("parseStrictOrderNum: 驗證正整數合法與非法值邊界", () => {
+      const issues: ValidationIssue[] = [];
+      const errors: string[] = [];
+
+      // 合法值
+      expect(parseStrictOrderNum(1, "order_num", 2, "questions", issues, errors)).toBe(1);
+      expect(parseStrictOrderNum(10, "order_num", 2, "questions", issues, errors)).toBe(10);
+      expect(parseStrictOrderNum("1", "order_num", 2, "questions", issues, errors)).toBe(1);
+      expect(parseStrictOrderNum(" 5 ", "order_num", 2, "questions", issues, errors)).toBe(5);
+      expect(issues).toHaveLength(0);
+
+      // 非法值：浮點數、0、負數、文字、空字串、null
+      expect(parseStrictOrderNum(1.5, "order_num", 2, "questions", issues, errors)).toBeNull();
+      expect(parseStrictOrderNum(0, "order_num", 3, "questions", issues, errors)).toBeNull();
+      expect(parseStrictOrderNum(-1, "order_num", 4, "questions", issues, errors)).toBeNull();
+      expect(parseStrictOrderNum("abc", "order_num", 5, "questions", issues, errors)).toBeNull();
+      expect(parseStrictOrderNum("", "order_num", 6, "questions", issues, errors)).toBeNull();
+      expect(parseStrictOrderNum(null, "order_num", 7, "questions", issues, errors)).toBeNull();
+
+      expect(issues.some((i) => i.code === "INVALID_ORDER_NUM" && i.row === 2)).toBe(true);
+      expect(issues.some((i) => i.code === "INVALID_ORDER_NUM" && i.row === 3)).toBe(true);
+      expect(issues.some((i) => i.code === "INVALID_ORDER_NUM" && i.row === 4)).toBe(true);
+      expect(issues.some((i) => i.code === "INVALID_ORDER_NUM" && i.row === 5)).toBe(true);
+      expect(issues.some((i) => i.code === "REQUIRED_FIELD_EMPTY" && i.row === 6)).toBe(true);
+      expect(issues.some((i) => i.code === "REQUIRED_FIELD_EMPTY" && i.row === 7)).toBe(true);
+    });
+
+    it("questions 工作表中重複的 order_num 應被拒絕並產生 DUPLICATE_ORDER", async () => {
+      const buffer = await createWorkbookBuffer({
+        questions: [
+          { code: "Q1", title: "題目 1", order_num: 1 },
+          { code: "Q2", title: "題目 2", order_num: 1 }, // 重複 order_num
+        ],
+      });
+
+      const { errors, issues } = await parseSurveyExcel(buffer);
+      expect(errors.length).toBeGreaterThan(0);
+      const dupIssue = issues.find((i) => i.code === "DUPLICATE_ORDER");
+      expect(dupIssue).toBeDefined();
+      expect(dupIssue?.field).toBe("order_num");
+      expect(dupIssue?.value).toBe("1");
+    });
+
+    it("choices 工作表中同一題目下重複的 order_num 應被拒絕並產生 DUPLICATE_CHOICE_ORDER", async () => {
+      const buffer = await createWorkbookBuffer({
+        choices: [
+          { question_code: "Q1", label: "選項 1", value: "opt1", order_num: 1 },
+          { question_code: "Q1", label: "選項 2", value: "opt2", order_num: 1 }, // 重複
+          { question_code: "Q2", label: "選項 A", value: "optA", order_num: 1 }, // 不同題目允許同序號
+        ],
+      });
+
+      const { errors, issues } = await parseSurveyExcel(buffer);
+      expect(errors.length).toBeGreaterThan(0);
+      const dupChoiceIssue = issues.find((i) => i.code === "DUPLICATE_CHOICE_ORDER");
+      expect(dupChoiceIssue).toBeDefined();
+      expect(dupChoiceIssue?.sheet).toBe("choices");
+      expect(dupChoiceIssue?.value).toBe("1");
+    });
+  });
+
+  // =========================================================================
+  // 6. Import Publish Boundary & Status Enforcement (P0 Safety)
+  // =========================================================================
+  describe("6. Import Publish Boundary & Status Enforcement (P0 Safety)", () => {
+    it("POST /api/surveys/import: 若 client 傳遞 status=PUBLISHED，應被伺服端拒絕 (400 IMPORT_CANNOT_PUBLISH)", async () => {
+      const buffer = await createWorkbookBuffer();
+      const blob = new Blob([new Uint8Array(buffer)], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const formData = new FormData();
+      formData.append("file", blob, "test.xlsx");
+      formData.append("mode", "save");
+      formData.append("copyrightConfirmed", "true");
+      formData.append("status", "PUBLISHED"); // 嘗試越權直接發布
+
+      const req = new NextRequest("http://localhost:3000/api/surveys/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const res = await importPOST(req);
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.errors.some((e: any) => e.code === "IMPORT_CANNOT_PUBLISH")).toBe(true);
+    });
+
+    it("POST /api/surveys/import: 正常匯入成功時，問卷狀態必須強制為 DRAFT (草稿)", async () => {
+      const buffer = await createWorkbookBuffer();
+      const blob = new Blob([new Uint8Array(buffer)], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const formData = new FormData();
+      formData.append("file", blob, "test.xlsx");
+      formData.append("mode", "save");
+      formData.append("title", "[M9-E.0.1-TEST] 匯入草稿問卷");
+      formData.append("copyrightConfirmed", "true");
+
+      const req = new NextRequest("http://localhost:3000/api/surveys/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const res = await importPOST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.surveyId).toBeDefined();
+
+      const created = await db.survey.findUnique({
+        where: { id: data.surveyId },
+      });
+      expect(created?.status).toBe("DRAFT");
+
+      // 清理測試資料
+      await db.survey.delete({ where: { id: data.surveyId } });
     });
   });
 });

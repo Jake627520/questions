@@ -64,9 +64,43 @@ export async function POST(req: NextRequest) {
     const mode = (formData.get("mode") as string) || "preview";
     const title = (formData.get("title") as string) || "匯入題庫問卷";
     const description = (formData.get("description") as string) || "";
-    const status = (formData.get("status") as SurveyStatus) || SurveyStatus.PUBLISHED;
-    const parentSurveyId = (formData.get("parentSurveyId") as string) || null;
     const requestedOrgId = (formData.get("organizationId") as string) || "default-org-id";
+    const statusParam = (formData.get("status") as string) || "";
+    if (statusParam.toUpperCase() === "PUBLISHED") {
+      const issue: ValidationIssue = {
+        code: "IMPORT_CANNOT_PUBLISH",
+        severity: "error",
+        sheet: "system",
+        message: "匯入問卷只能建立為草稿 (DRAFT)，禁止直接於匯入階段發布。請於匯入後至後台審閱並透過發布流程發布。",
+        suggestion: "請將 status 設為 DRAFT 或保留預設值。",
+      };
+
+      if (mode === "save") {
+        await recordFailedImport({
+          importId,
+          organizationId: requestedOrgId,
+          fileName: file?.name || "unknown.xlsx",
+          fileSize: file?.size || 0,
+          mode,
+          errorCode: issue.code,
+          errorMessage: issue.message,
+          errorDetails: [issue],
+        });
+      }
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: issue.message,
+          importId,
+          errors: [issue],
+          warnings: [],
+        } satisfies ImportResponse,
+        { status: 400 }
+      );
+    }
+    const status = SurveyStatus.DRAFT;
+    const parentSurveyId = (formData.get("parentSurveyId") as string) || null;
 
     // 確保 default organization 存在
     const defaultOrg = await db.organization.upsert({
