@@ -149,4 +149,28 @@ export interface CrossTabResult {
   grandTotal: number;      // 同時有效回答 Row 與 Col 之雙重有效作答 Response 數
   unpairedCount: number;   // 未同時有效回答兩題之 Response 數 (totalResponses - grandTotal)
   totalResponses: number;  // 傳入的總填答數 (符合 status/time 篩選)
+  statistics?: CrossTabStatistics | null; // M9-F.2 統計檢定結果 (可選)
 }
+
+/**
+ * =========================================================================
+ * Cross-tabulation Statistics Types (Phase M9-F.2 Pure Statistical Engine)
+ * =========================================================================
+ */
+
+export interface CrossTabStatistics {
+  sampleSize: number;
+  chiSquare: number | null;
+  pValue: number | null;
+  degreesOfFreedom: number;
+  cramersV: number | null;
+
+  expectedCounts: number[][];
+  minExpectedCount: number;
+  cellsBelowExpectedThreshold: number;
+  percentageBelowExpectedThreshold: number;
+
+  isTestValid: boolean;
+  warning?: string | null;
+}
+
