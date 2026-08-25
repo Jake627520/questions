@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
+import { ResponseStatus } from "@prisma/client";
+import {
+  getCurrentUser,
+  unauthorizedResponse,
+  isUserInOrganization,
+  forbiddenResponse,
+} from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
@@ -13,17 +19,18 @@ export async function GET(
     }
 
     const { id } = params;
+    const url = new URL(req.url);
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+    const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") || "50", 10)));
+    const statusParam = url.searchParams.get("status");
+
     const survey = await db.survey.findUnique({
       where: { id },
-      include: {
-        responses: {
-          orderBy: { createdAt: "desc" },
-          include: {
-            _count: {
-              select: { answers: true },
-            },
-          },
-        },
+      select: {
+        id: true,
+        title: true,
+        version: true,
+        organizationId: true,
       },
     });
 
@@ -36,12 +43,39 @@ export async function GET(
       return forbiddenResponse("您無權查看此組織問卷的填答紀錄");
     }
 
-    const responses = survey.responses.map((r) => ({
+    const whereClause: any = { surveyId: id };
+    if (statusParam && statusParam !== "all") {
+      if (Object.values(ResponseStatus).includes(statusParam as ResponseStatus)) {
+        whereClause.status = statusParam as ResponseStatus;
+      }
+    }
+
+    const total = await db.response.count({ where: whereClause });
+    const rawResponses = await db.response.findMany({
+      where: whereClause,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        _count: {
+          select: { answers: true },
+        },
+      },
+    });
+
+    const responses = rawResponses.map((r) => ({
       id: r.id,
       status: r.status,
       version: r.version,
+      idempotencyKey: r.idempotencyKey,
+      ipHash: r.ipHash,
+      userAgent: r.userAgent,
+      durationSeconds: r.durationSeconds,
+      startedAt: r.startedAt,
       submittedAt: r.submittedAt,
       createdAt: r.createdAt,
+      excludedReason: r.excludedReason,
+      excludedAt: r.excludedAt,
       totalScore: r.totalScore,
       maxScore: r.maxScore,
       percentage: r.percentage,
@@ -53,6 +87,12 @@ export async function GET(
         id: survey.id,
         title: survey.title,
         version: survey.version,
+      },
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
       },
       responses,
     });

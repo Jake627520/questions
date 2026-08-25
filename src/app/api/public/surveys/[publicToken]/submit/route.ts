@@ -7,14 +7,20 @@ import {
   checkSurveyCollectionEligibility,
   DomainEligibilityError,
 } from "@/lib/survey-lifecycle";
+import {
+  hashClientIp,
+  validateIdempotencyKey,
+  calculateFillingDuration,
+  extractClientIp,
+} from "@/lib/submission-integrity";
 
 export const dynamic = "force-dynamic";
 
 /**
  * 公開問卷提交 API (Public Survey Submission)
- * - 依賴 publicToken，接受匿名大眾填答
- * - 伺服器端完成答題驗證、邏輯跳題計算與分數計算
- * - 事務內原子性配額防超額與狀態守衛 (In-Transaction Concurrency Hardening)
+ * - 支援客戶端 Idempotency-Key 冪等金鑰防重複提交與網路重試重放 (Fast-path Idempotency Replay)
+ * - 支援 IP 單向雜湊隱私審計 (HMAC-SHA256)、User-Agent 與填答耗時計算
+ * - 事務內以 SELECT FOR UPDATE 行級排他鎖保護配額與狀態，保證高並行零超額
  */
 export async function POST(
   req: NextRequest,
@@ -33,6 +39,26 @@ export async function POST(
     const body = await req.json();
     const responseId = body.responseId as string | undefined;
     const answersInput = (body.answers || []) as AnswerSubmission[];
+
+    // 擷取並檢驗冪等金鑰 (支援 Header 或 Body)
+    const rawIdempotencyKey =
+      req.headers.get("idempotency-key") ||
+      req.headers.get("x-idempotency-key") ||
+      body.idempotencyKey;
+    let idempotencyKey: string | null = null;
+
+    if (rawIdempotencyKey) {
+      if (!validateIdempotencyKey(rawIdempotencyKey)) {
+        return NextResponse.json(
+          {
+            error: "INVALID_IDEMPOTENCY_KEY",
+            message: "冪等金鑰格式無效，長度須介於 8 ~ 64 字元且僅含英數連字號。",
+          },
+          { status: 400 }
+        );
+      }
+      idempotencyKey = rawIdempotencyKey.trim();
+    }
 
     // 取得問卷與題目設定
     const survey = await db.survey.findUnique({
@@ -59,7 +85,32 @@ export async function POST(
       );
     }
 
-    // 1. 預先檢查 (Fast-path Check)
+    // 1. 快速冪等重放檢查 (Fast-path Replay Check)
+    if (idempotencyKey) {
+      const existingIdempotent = await db.response.findUnique({
+        where: { idempotencyKey },
+        select: { id: true, surveyId: true, status: true },
+      });
+
+      if (existingIdempotent && existingIdempotent.surveyId === survey.id) {
+        if (existingIdempotent.status === ResponseStatus.COMPLETED) {
+          return NextResponse.json(
+            {
+              success: true,
+              message: "問卷提交成功 (冪等重放)",
+              responseId: existingIdempotent.id,
+              replayed: true,
+            },
+            {
+              status: 200,
+              headers: { "Idempotent-Replayed": "true" },
+            }
+          );
+        }
+      }
+    }
+
+    // 2. 預先檢查 (Fast-path Eligibility Check)
     const initialEligibility = checkSurveyCollectionEligibility(
       {
         status: survey.status,
@@ -127,9 +178,17 @@ export async function POST(
       );
     }
 
-    // 2. 事務內寫入/更新 Response (設為 COMPLETED) 與 Answers，並進行原子配額與狀態再驗證
+    // 擷取客戶端審計與隱私資訊
+    const clientIp = extractClientIp(req);
+    const ipHash = hashClientIp(clientIp);
+    const userAgent = req.headers.get("user-agent") || null;
+    const now = new Date();
+    const durationSeconds = calculateFillingDuration(body.startedAt, now);
+    const startedAt = body.startedAt ? new Date(body.startedAt) : null;
+
+    // 3. 事務內寫入/更新 Response (設為 COMPLETED) 與 Answers，並進行原子排他鎖守衛
     const savedResponse = await db.$transaction(async (tx) => {
-      // 事務內以 FOR UPDATE 行級排他鎖鎖定問卷記錄，保證高並行下配額檢驗嚴格串行化 (Zero-Overshoot Concurrency Protection)
+      // 事務內以 FOR UPDATE 行級排他鎖鎖定問卷記錄
       await tx.$queryRaw`SELECT id, status FROM surveys WHERE id = ${survey.id} FOR UPDATE`;
 
       const liveSurvey = await tx.survey.findUnique({
@@ -154,7 +213,6 @@ export async function POST(
         where: {
           surveyId: survey.id,
           status: ResponseStatus.COMPLETED,
-          // 若為既有草稿轉正式提交，不重複計數自身
           ...(responseId ? { NOT: { id: responseId } } : {}),
         },
       });
@@ -187,10 +245,15 @@ export async function POST(
           where: { id: responseId },
           data: {
             status: ResponseStatus.COMPLETED,
+            idempotencyKey: idempotencyKey || undefined,
+            ipHash,
+            userAgent,
+            durationSeconds,
+            startedAt: startedAt || existingDraft.startedAt,
             totalScore: evaluation.totalScore,
             maxScore: evaluation.maxScore,
             percentage: evaluation.percentage,
-            submittedAt: new Date(),
+            submittedAt: now,
           },
         });
         // 清理舊答案再重新寫入
@@ -202,10 +265,15 @@ export async function POST(
             surveyId: survey.id,
             version: survey.version,
             status: ResponseStatus.COMPLETED,
+            idempotencyKey,
+            ipHash,
+            userAgent,
+            durationSeconds,
+            startedAt,
             totalScore: evaluation.totalScore,
             maxScore: evaluation.maxScore,
             percentage: evaluation.percentage,
-            submittedAt: new Date(),
+            submittedAt: now,
           },
         });
       }
@@ -266,6 +334,32 @@ export async function POST(
       responseId: savedResponse.id,
     });
   } catch (error: any) {
+    // 捕獲高並行同冪等鍵並行競爭之 Unique Constraint
+    if (error?.code === "P2002" && error?.meta?.target?.includes("idempotency_key")) {
+      const rawIdempotencyKey =
+        req.headers.get("idempotency-key") ||
+        req.headers.get("x-idempotency-key");
+      if (rawIdempotencyKey) {
+        const winningResponse = await db.response.findUnique({
+          where: { idempotencyKey: rawIdempotencyKey.trim() },
+        });
+        if (winningResponse) {
+          return NextResponse.json(
+            {
+              success: true,
+              message: "問卷提交成功 (並行冪等重放)",
+              responseId: winningResponse.id,
+              replayed: true,
+            },
+            {
+              status: 200,
+              headers: { "Idempotent-Replayed": "true" },
+            }
+          );
+        }
+      }
+    }
+
     if (error instanceof DomainEligibilityError || error?.name === "DomainEligibilityError") {
       return NextResponse.json(
         { error: error.code, message: error.message },

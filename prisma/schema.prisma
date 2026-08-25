@@ -17,6 +17,7 @@ enum SurveyStatus {
 enum ResponseStatus {
   IN_PROGRESS
   COMPLETED
+  EXCLUDED
 }
 
 enum QuestionType {
@@ -260,20 +261,30 @@ model Choice {
 }
 
 model Response {
-  id          String         @id @default(cuid())
-  surveyId    String         @map("survey_id")
-  version     Int            @default(1)
-  status      ResponseStatus @default(COMPLETED)
-  totalScore  Float?         @map("total_score")
-  maxScore    Float?         @map("max_score")
-  percentage  Float?
-  submittedAt DateTime?      @map("submitted_at")
-  createdAt   DateTime       @default(now()) @map("created_at")
+  id              String         @id @default(cuid())
+  surveyId        String         @map("survey_id")
+  version         Int            @default(1)
+  status          ResponseStatus @default(COMPLETED)
+  idempotencyKey  String?        @unique @map("idempotency_key")
+  ipHash          String?        @map("ip_hash")
+  userAgent       String?        @map("user_agent") @db.Text
+  durationSeconds Int?           @map("duration_seconds")
+  startedAt       DateTime?      @map("started_at")
+  submittedAt     DateTime?      @map("submitted_at")
+  excludedReason  String?        @map("excluded_reason") @db.Text
+  excludedAt      DateTime?      @map("excluded_at")
+  excludedById    String?        @map("excluded_by_id")
+  totalScore      Float?         @map("total_score")
+  maxScore        Float?         @map("max_score")
+  percentage      Float?
+  createdAt       DateTime       @default(now()) @map("created_at")
 
   survey  Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   answers Answer[]
 
   @@index([surveyId])
+  @@index([surveyId, status])
+  @@index([surveyId, submittedAt])
   @@map("responses")
 }
 

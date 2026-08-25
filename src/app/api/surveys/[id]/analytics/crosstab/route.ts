@@ -153,11 +153,14 @@ export async function GET(
 
     const responseWhere: any = {
       surveyId: survey.id,
+      status: ResponseStatus.COMPLETED, // 預設嚴格僅納入正式作答 (排除草稿與 EXCLUDED 標記資料)
     };
-    if (statusParam === "COMPLETED") {
-      responseWhere.status = ResponseStatus.COMPLETED;
-    } else if (statusParam === "IN_PROGRESS") {
+    if (statusParam === "IN_PROGRESS") {
       responseWhere.status = ResponseStatus.IN_PROGRESS;
+    } else if (statusParam === "EXCLUDED") {
+      responseWhere.status = ResponseStatus.EXCLUDED;
+    } else if (statusParam === "all") {
+      delete responseWhere.status;
     }
     if (startDate || endDate) {
       responseWhere.createdAt = {};
