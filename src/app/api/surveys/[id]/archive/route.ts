@@ -8,7 +8,10 @@ import {
   hasRole,
   ROLES,
 } from "@/lib/auth";
-import { validateStatusTransition } from "@/lib/survey-lifecycle";
+import {
+  validateStatusTransition,
+  InvalidTransitionError,
+} from "@/lib/survey-lifecycle";
 
 export async function POST(
   req: NextRequest,
@@ -21,17 +24,18 @@ export async function POST(
     }
 
     const { id } = params;
-    const survey = await db.survey.findUnique({
+    const preCheck = await db.survey.findUnique({
       where: { id },
+      select: { organizationId: true },
     });
 
-    if (!survey) {
+    if (!preCheck) {
       return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
     }
 
     const { allowed, membership } = await hasRole(
       auth.user.id,
-      survey.organizationId,
+      preCheck.organizationId,
       ROLES.EDITORS
     );
     if (!membership) {
@@ -41,19 +45,30 @@ export async function POST(
       return forbiddenResponse("您的角色權限不足，僅管理員與編輯者可歸檔問卷");
     }
 
-    const transition = validateStatusTransition(survey.status, SurveyStatus.ARCHIVED);
-    if (!transition.valid) {
-      return NextResponse.json(
-        { error: "INVALID_STATUS_TRANSITION", message: transition.reason },
-        { status: 400 }
-      );
-    }
+    const updated = await db.$transaction(async (tx) => {
+      const survey = await tx.survey.findUnique({
+        where: { id },
+      });
 
-    const updated = await db.survey.update({
-      where: { id },
-      data: {
-        status: SurveyStatus.ARCHIVED,
-      },
+      if (!survey) {
+        throw new Error("NOT_FOUND");
+      }
+
+      const transition = validateStatusTransition(survey.status, SurveyStatus.ARCHIVED);
+      if (!transition.valid) {
+        throw new InvalidTransitionError(
+          survey.status,
+          SurveyStatus.ARCHIVED,
+          transition.reason || "非法狀態轉換"
+        );
+      }
+
+      return tx.survey.update({
+        where: { id },
+        data: {
+          status: SurveyStatus.ARCHIVED,
+        },
+      });
     });
 
     return NextResponse.json({
@@ -62,6 +77,16 @@ export async function POST(
       survey: updated,
     });
   } catch (error: any) {
+    if (error instanceof InvalidTransitionError || error?.name === "InvalidTransitionError") {
+      return NextResponse.json(
+        { error: "INVALID_STATUS_TRANSITION", message: error.message },
+        { status: 400 }
+      );
+    }
+    if (error.message === "NOT_FOUND") {
+      return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
+    }
+
     console.error("[Survey Archive Error]:", error);
     return NextResponse.json(
       { error: "歸檔問卷失敗", details: error.message },

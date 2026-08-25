@@ -8,7 +8,10 @@ import {
   hasRole,
   ROLES,
 } from "@/lib/auth";
-import { validateStatusTransition } from "@/lib/survey-lifecycle";
+import {
+  validateStatusTransition,
+  InvalidTransitionError,
+} from "@/lib/survey-lifecycle";
 
 export async function POST(
   req: NextRequest,
@@ -21,22 +24,18 @@ export async function POST(
     }
 
     const { id } = params;
-    const survey = await db.survey.findUnique({
+    const preCheck = await db.survey.findUnique({
       where: { id },
-      include: {
-        _count: {
-          select: { responses: true },
-        },
-      },
+      select: { organizationId: true },
     });
 
-    if (!survey) {
+    if (!preCheck) {
       return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
     }
 
     const { allowed, membership } = await hasRole(
       auth.user.id,
-      survey.organizationId,
+      preCheck.organizationId,
       ROLES.EDITORS
     );
     if (!membership) {
@@ -46,30 +45,45 @@ export async function POST(
       return forbiddenResponse("您的角色權限不足，僅管理員與編輯者可還原問卷");
     }
 
-    if (survey.status !== SurveyStatus.ARCHIVED) {
-      return NextResponse.json(
-        { error: "INVALID_OPERATION", message: "僅已歸檔之問卷可進行還原操作。" },
-        { status: 400 }
-      );
-    }
+    const { updated, targetStatus } = await db.$transaction(async (tx) => {
+      const survey = await tx.survey.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: { responses: true },
+          },
+        },
+      });
 
-    // 若從未收集過作答則還原為 DRAFT，否則還原為 CLOSED 保障安全性
-    const targetStatus =
-      survey._count.responses === 0 ? SurveyStatus.DRAFT : SurveyStatus.CLOSED;
+      if (!survey) {
+        throw new Error("NOT_FOUND");
+      }
 
-    const transition = validateStatusTransition(survey.status, targetStatus);
-    if (!transition.valid) {
-      return NextResponse.json(
-        { error: "INVALID_STATUS_TRANSITION", message: transition.reason },
-        { status: 400 }
-      );
-    }
+      if (survey.status !== SurveyStatus.ARCHIVED) {
+        throw new Error("INVALID_OPERATION");
+      }
 
-    const updated = await db.survey.update({
-      where: { id },
-      data: {
-        status: targetStatus,
-      },
+      // 若從未收集過作答則還原為 DRAFT，否則還原為 CLOSED 保障安全性
+      const statusToRestore =
+        survey._count.responses === 0 ? SurveyStatus.DRAFT : SurveyStatus.CLOSED;
+
+      const transition = validateStatusTransition(survey.status, statusToRestore);
+      if (!transition.valid) {
+        throw new InvalidTransitionError(
+          survey.status,
+          statusToRestore,
+          transition.reason || "非法狀態轉換"
+        );
+      }
+
+      const surveyUpdated = await tx.survey.update({
+        where: { id },
+        data: {
+          status: statusToRestore,
+        },
+      });
+
+      return { updated: surveyUpdated, targetStatus: statusToRestore };
     });
 
     return NextResponse.json({
@@ -78,6 +92,22 @@ export async function POST(
       survey: updated,
     });
   } catch (error: any) {
+    if (error.message === "INVALID_OPERATION") {
+      return NextResponse.json(
+        { error: "INVALID_OPERATION", message: "僅已歸檔之問卷可進行還原操作。" },
+        { status: 400 }
+      );
+    }
+    if (error instanceof InvalidTransitionError || error?.name === "InvalidTransitionError") {
+      return NextResponse.json(
+        { error: "INVALID_STATUS_TRANSITION", message: error.message },
+        { status: 400 }
+      );
+    }
+    if (error.message === "NOT_FOUND") {
+      return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
+    }
+
     console.error("[Survey Restore Error]:", error);
     return NextResponse.json(
       { error: "還原問卷失敗", details: error.message },

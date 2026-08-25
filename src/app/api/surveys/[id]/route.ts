@@ -9,7 +9,11 @@ import {
   hasRole,
   ROLES,
 } from "@/lib/auth";
-import { validateStatusTransition } from "@/lib/survey-lifecycle";
+import {
+  validateStatusTransition,
+  checkFieldImmutability,
+  InvalidTransitionError,
+} from "@/lib/survey-lifecycle";
 
 export async function GET(
   req: NextRequest,
@@ -140,64 +144,85 @@ export async function PATCH(
       return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能修改問卷");
     }
 
-    // 若問卷已發布 (PUBLISHED)，禁止直接修改會影響歷史結果之題目、計分與條件規則
-    if (existingSurvey.status === SurveyStatus.PUBLISHED) {
-      const restrictedFields = ["questions", "choices", "scoringRules", "visibilityRules"];
-      const hasRestrictedModifications = restrictedFields.some((field) => field in body);
-
-      if (hasRestrictedModifications) {
-        return NextResponse.json(
-          {
-            error:
-              "問卷已發布並處於鎖定狀態 (Published Lock)，禁止直接修改題目、選項或計分規則。如需修改請點選「建立新版本 (Clone Version)」。",
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    // 若有更新狀態，執行狀態機合法性檢查
-    if (body.status && body.status !== existingSurvey.status) {
-      const transition = validateStatusTransition(
-        existingSurvey.status,
-        body.status as SurveyStatus,
+    // 發布後/關閉後/歸檔後之不可變欄位防呆檢驗 (Published Lock Immutability)
+    const immutabilityCheck = checkFieldImmutability(existingSurvey.status, body);
+    if (!immutabilityCheck.allowed) {
+      return NextResponse.json(
         {
-          questionCount: existingSurvey._count.questions,
-          responseCount: existingSurvey._count.responses,
-        }
+          code: "PUBLISHED_LOCK_VIOLATION",
+          error: `問卷已發布並處於鎖定狀態 (Published Lock)，禁止直接修改題目、選項或計分規則。如需修改請點選「建立新版本 (Clone Version)」。`,
+          message: `問卷處於 ${existingSurvey.status} 狀態，禁止直接修改結構欄位 [${immutabilityCheck.violationField}]。如需修改題目結構請點選「建立新版本 (Clone Version)」。`,
+        },
+        { status: 403 }
       );
-      if (!transition.valid) {
-        return NextResponse.json(
-          { error: "INVALID_STATUS_TRANSITION", message: transition.reason },
-          { status: 400 }
-        );
+    }
+
+    const updated = await db.$transaction(async (tx) => {
+      const liveSurvey = await tx.survey.findUnique({
+        where: { id },
+        include: {
+          _count: { select: { responses: true, questions: true } },
+        },
+      });
+
+      if (!liveSurvey) {
+        throw new Error("NOT_FOUND");
       }
-    }
 
-    const updateData: any = {};
-    if (body.title !== undefined) updateData.title = body.title;
-    if (body.description !== undefined) updateData.description = body.description;
-    if (body.status !== undefined) updateData.status = body.status;
-    if (body.isAnonymous !== undefined) updateData.isAnonymous = body.isAnonymous;
-    if (body.collectIdentity !== undefined) updateData.collectIdentity = body.collectIdentity;
-    if (body.startDate !== undefined) {
-      updateData.startDate = body.startDate ? new Date(body.startDate) : null;
-    }
-    if (body.endDate !== undefined) {
-      updateData.endDate = body.endDate ? new Date(body.endDate) : null;
-    }
-    if (body.responseQuota !== undefined) {
-      updateData.responseQuota =
-        body.responseQuota !== null ? Number(body.responseQuota) : null;
-    }
+      // 若有更新狀態，執行狀態機合法性檢查
+      if (body.status && body.status !== liveSurvey.status) {
+        const transition = validateStatusTransition(
+          liveSurvey.status,
+          body.status as SurveyStatus,
+          {
+            questionCount: liveSurvey._count.questions,
+            responseCount: liveSurvey._count.responses,
+          }
+        );
+        if (!transition.valid) {
+          throw new InvalidTransitionError(
+            liveSurvey.status,
+            body.status as SurveyStatus,
+            transition.reason || "非法狀態轉換"
+          );
+        }
+      }
 
-    const updated = await db.survey.update({
-      where: { id },
-      data: updateData,
+      const updateData: any = {};
+      if (body.title !== undefined) updateData.title = body.title;
+      if (body.description !== undefined) updateData.description = body.description;
+      if (body.status !== undefined) updateData.status = body.status;
+      if (body.isAnonymous !== undefined) updateData.isAnonymous = body.isAnonymous;
+      if (body.collectIdentity !== undefined) updateData.collectIdentity = body.collectIdentity;
+      if (body.startDate !== undefined) {
+        updateData.startDate = body.startDate ? new Date(body.startDate) : null;
+      }
+      if (body.endDate !== undefined) {
+        updateData.endDate = body.endDate ? new Date(body.endDate) : null;
+      }
+      if (body.responseQuota !== undefined) {
+        updateData.responseQuota =
+          body.responseQuota !== null ? Number(body.responseQuota) : null;
+      }
+
+      return tx.survey.update({
+        where: { id },
+        data: updateData,
+      });
     });
 
     return NextResponse.json({ success: true, survey: updated });
   } catch (error: any) {
+    if (error instanceof InvalidTransitionError || error?.name === "InvalidTransitionError") {
+      return NextResponse.json(
+        { error: "INVALID_STATUS_TRANSITION", message: error.message },
+        { status: 400 }
+      );
+    }
+    if (error.message === "NOT_FOUND") {
+      return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
+    }
+
     console.error("Error updating survey:", error);
     return NextResponse.json(
       { error: "更新問卷失敗", details: error.message },

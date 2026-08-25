@@ -3,7 +3,10 @@ import { db } from "@/lib/db";
 import { evaluateSurveySubmission } from "@/lib/survey-engine";
 import { AnswerSubmission } from "@/lib/types";
 import { ResponseStatus, SurveyStatus } from "@prisma/client";
-import { checkSurveyCollectionEligibility } from "@/lib/survey-lifecycle";
+import {
+  checkSurveyCollectionEligibility,
+  DomainEligibilityError,
+} from "@/lib/survey-lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +14,7 @@ export const dynamic = "force-dynamic";
  * 公開問卷提交 API (Public Survey Submission)
  * - 依賴 publicToken，接受匿名大眾填答
  * - 伺服器端完成答題驗證、邏輯跳題計算與分數計算
+ * - 事務內原子性配額防超額與狀態守衛 (In-Transaction Concurrency Hardening)
  */
 export async function POST(
   req: NextRequest,
@@ -55,7 +59,8 @@ export async function POST(
       );
     }
 
-    const eligibility = checkSurveyCollectionEligibility(
+    // 1. 預先檢查 (Fast-path Check)
+    const initialEligibility = checkSurveyCollectionEligibility(
       {
         status: survey.status,
         startDate: survey.startDate,
@@ -65,11 +70,11 @@ export async function POST(
       survey._count.responses
     );
 
-    if (!eligibility.eligible) {
+    if (!initialEligibility.eligible) {
       return NextResponse.json(
         {
-          error: eligibility.code,
-          message: eligibility.message,
+          error: initialEligibility.code,
+          message: initialEligibility.message,
         },
         { status: 403 }
       );
@@ -82,11 +87,16 @@ export async function POST(
       code: q.code,
       title: q.title,
       description: q.description,
-      questionType: q.questionType as any,
+      questionType: q.questionType,
       required: q.required,
       scoringEnabled: q.scoringEnabled,
       reverseScore: q.reverseScore,
-      visibilityRules: q.visibilityRules,
+      visibilityHint: q.visibilityHint,
+      visibilityRules: q.visibilityRules
+        ? typeof q.visibilityRules === "string"
+          ? JSON.parse(q.visibilityRules)
+          : q.visibilityRules
+        : null,
       minSelections: q.minSelections,
       maxSelections: q.maxSelections,
       minValue: q.minValue,
@@ -117,8 +127,50 @@ export async function POST(
       );
     }
 
-    // 寫入/更新 Response (設為 COMPLETED) 與 Answers
+    // 2. 事務內寫入/更新 Response (設為 COMPLETED) 與 Answers，並進行原子配額與狀態再驗證
     const savedResponse = await db.$transaction(async (tx) => {
+      // 事務內以 FOR UPDATE 行級排他鎖鎖定問卷記錄，保證高並行下配額檢驗嚴格串行化 (Zero-Overshoot Concurrency Protection)
+      await tx.$queryRaw`SELECT id, status FROM surveys WHERE id = ${survey.id} FOR UPDATE`;
+
+      const liveSurvey = await tx.survey.findUnique({
+        where: { id: survey.id },
+        select: {
+          status: true,
+          startDate: true,
+          endDate: true,
+          responseQuota: true,
+        },
+      });
+
+      if (!liveSurvey || liveSurvey.status !== SurveyStatus.PUBLISHED) {
+        throw new DomainEligibilityError(
+          "NOT_PUBLISHED",
+          "此問卷目前未開放填答或已變更狀態"
+        );
+      }
+
+      // 事務內計算最新已完成作答數量（防止高並行超出配額）
+      const completedCount = await tx.response.count({
+        where: {
+          surveyId: survey.id,
+          status: ResponseStatus.COMPLETED,
+          // 若為既有草稿轉正式提交，不重複計數自身
+          ...(responseId ? { NOT: { id: responseId } } : {}),
+        },
+      });
+
+      const txEligibility = checkSurveyCollectionEligibility(
+        liveSurvey,
+        completedCount
+      );
+
+      if (!txEligibility.eligible) {
+        throw new DomainEligibilityError(
+          txEligibility.code || "NOT_PUBLISHED",
+          txEligibility.message || "問卷未開放填答"
+        );
+      }
+
       let response;
 
       if (responseId) {
@@ -214,6 +266,13 @@ export async function POST(
       responseId: savedResponse.id,
     });
   } catch (error: any) {
+    if (error instanceof DomainEligibilityError || error?.name === "DomainEligibilityError") {
+      return NextResponse.json(
+        { error: error.code, message: error.message },
+        { status: 403 }
+      );
+    }
+
     console.error("[Public Survey Submit Error]:", error);
     return NextResponse.json(
       { error: "問卷提交失敗，請稍後再試", details: error.message },

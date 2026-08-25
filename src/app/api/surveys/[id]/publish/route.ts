@@ -12,6 +12,7 @@ import {
 import {
   validateStatusTransition,
   validateSurveyPrePublishChecklist,
+  InvalidTransitionError,
 } from "@/lib/survey-lifecycle";
 
 export async function POST(
@@ -25,27 +26,18 @@ export async function POST(
     }
 
     const { id } = params;
-    const survey = await db.survey.findUnique({
+    const preCheck = await db.survey.findUnique({
       where: { id },
-      include: {
-        questions: {
-          orderBy: { orderNum: "asc" },
-          include: {
-            choices: {
-              orderBy: { orderNum: "asc" },
-            },
-          },
-        },
-      },
+      select: { organizationId: true },
     });
 
-    if (!survey) {
+    if (!preCheck) {
       return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
     }
 
     const { allowed, membership } = await hasRole(
       auth.user.id,
-      survey.organizationId,
+      preCheck.organizationId,
       ROLES.EDITORS
     );
     if (!membership) {
@@ -55,48 +47,62 @@ export async function POST(
       return forbiddenResponse("您的角色權限不足，僅管理員與編輯者可發布問卷");
     }
 
-    // 1. 發布前清單檢查
-    const checklist = validateSurveyPrePublishChecklist({
-      title: survey.title,
-      questions: survey.questions.map((q) => ({
-        id: q.id,
-        code: q.code,
-        title: q.title,
-        questionType: q.questionType,
-        choices: q.choices,
-      })),
-    });
-
-    if (!checklist.ready) {
-      return NextResponse.json(
-        {
-          error: "PRE_PUBLISH_VALIDATION_FAILED",
-          message: "問卷發布檢查未通過，請修正以下問題：",
-          errors: checklist.errors,
+    const updated = await db.$transaction(async (tx) => {
+      const survey = await tx.survey.findUnique({
+        where: { id },
+        include: {
+          questions: {
+            orderBy: { orderNum: "asc" },
+            include: {
+              choices: {
+                orderBy: { orderNum: "asc" },
+              },
+            },
+          },
         },
-        { status: 400 }
-      );
-    }
+      });
 
-    // 2. 狀態轉換驗證
-    const transition = validateStatusTransition(
-      survey.status,
-      SurveyStatus.PUBLISHED,
-      { questionCount: survey.questions.length }
-    );
-    if (!transition.valid) {
-      return NextResponse.json(
-        { error: "INVALID_STATUS_TRANSITION", message: transition.reason },
-        { status: 400 }
-      );
-    }
+      if (!survey) {
+        throw new Error("NOT_FOUND");
+      }
 
-    const updated = await db.survey.update({
-      where: { id },
-      data: {
-        status: SurveyStatus.PUBLISHED,
-        publicToken: survey.publicToken || generatePublicToken(),
-      },
+      // 1. 發布前清單檢查
+      const checklist = validateSurveyPrePublishChecklist({
+        title: survey.title,
+        questions: survey.questions.map((q) => ({
+          id: q.id,
+          code: q.code,
+          title: q.title,
+          questionType: q.questionType,
+          choices: q.choices,
+        })),
+      });
+
+      if (!checklist.ready) {
+        throw new Error(`PRE_PUBLISH_VALIDATION_FAILED:${JSON.stringify(checklist.errors)}`);
+      }
+
+      // 2. 狀態轉換驗證
+      const transition = validateStatusTransition(
+        survey.status,
+        SurveyStatus.PUBLISHED,
+        { questionCount: survey.questions.length }
+      );
+      if (!transition.valid) {
+        throw new InvalidTransitionError(
+          survey.status,
+          SurveyStatus.PUBLISHED,
+          transition.reason || "非法狀態轉換"
+        );
+      }
+
+      return tx.survey.update({
+        where: { id },
+        data: {
+          status: SurveyStatus.PUBLISHED,
+          publicToken: survey.publicToken || generatePublicToken(),
+        },
+      });
     });
 
     return NextResponse.json({
@@ -105,6 +111,27 @@ export async function POST(
       survey: updated,
     });
   } catch (error: any) {
+    if (error.message?.startsWith("PRE_PUBLISH_VALIDATION_FAILED:")) {
+      const errorJson = error.message.replace("PRE_PUBLISH_VALIDATION_FAILED:", "");
+      return NextResponse.json(
+        {
+          error: "PRE_PUBLISH_VALIDATION_FAILED",
+          message: "問卷發布檢查未通過，請修正以下問題：",
+          errors: JSON.parse(errorJson),
+        },
+        { status: 400 }
+      );
+    }
+    if (error instanceof InvalidTransitionError || error?.name === "InvalidTransitionError") {
+      return NextResponse.json(
+        { error: "INVALID_STATUS_TRANSITION", message: error.message },
+        { status: 400 }
+      );
+    }
+    if (error.message === "NOT_FOUND") {
+      return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
+    }
+
     console.error("[Survey Publish Error]:", error);
     return NextResponse.json(
       { error: "發布問卷失敗", details: error.message },

@@ -44,6 +44,65 @@ export interface PrePublishChecklistResult {
 }
 
 /**
+ * 領域異常類別：資格檢查未通過
+ */
+export class DomainEligibilityError extends Error {
+  constructor(
+    public readonly code: CollectionIneligibleCode,
+    message: string
+  ) {
+    super(message);
+    this.name = "DomainEligibilityError";
+  }
+}
+
+/**
+ * 領域異常類別：非法狀態流轉
+ */
+export class InvalidTransitionError extends Error {
+  constructor(
+    public readonly currentStatus: SurveyStatus,
+    public readonly targetStatus: SurveyStatus,
+    reason: string
+  ) {
+    super(reason);
+    this.name = "InvalidTransitionError";
+  }
+}
+
+/**
+ * 發布後受保護之不可變欄位清單 (Published Lock Immutability)
+ */
+export const IMMUTABLE_FIELDS_AFTER_PUBLISH = [
+  "questions",
+  "choices",
+  "scoringRules",
+  "visibilityRules",
+  "isAnonymous",
+  "collectIdentity",
+] as const;
+
+/**
+ * 檢查更新載荷在目前狀態下是否包含不可變欄位
+ */
+export function checkFieldImmutability(
+  currentStatus: SurveyStatus,
+  payload: Record<string, any>
+): { allowed: boolean; violationField?: string } {
+  if (currentStatus === SurveyStatus.DRAFT) {
+    return { allowed: true };
+  }
+
+  for (const field of IMMUTABLE_FIELDS_AFTER_PUBLISH) {
+    if (field in payload && payload[field] !== undefined) {
+      return { allowed: false, violationField: field };
+    }
+  }
+
+  return { allowed: true };
+}
+
+/**
  * 驗證問卷狀態轉換之合法性 (Survey Lifecycle State Machine)
  * 支援狀態：DRAFT, PUBLISHED, CLOSED, ARCHIVED
  */
