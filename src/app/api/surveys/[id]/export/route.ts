@@ -78,14 +78,20 @@ export async function GET(
       }
     }
 
+    const normalizedStatus = statusParam?.toUpperCase();
     const responseWhere: any = {
       surveyId: id,
     };
 
-    if (statusParam === "COMPLETED") {
-      responseWhere.status = ResponseStatus.COMPLETED;
-    } else if (statusParam === "IN_PROGRESS") {
+    if (normalizedStatus === "IN_PROGRESS") {
       responseWhere.status = ResponseStatus.IN_PROGRESS;
+    } else if (normalizedStatus === "EXCLUDED") {
+      responseWhere.status = ResponseStatus.EXCLUDED;
+    } else if (normalizedStatus === "ALL") {
+      // 顯示全部作答
+    } else {
+      // 預設嚴格僅匯出正式有效作答 (排除草稿與 EXCLUDED 標記資料)
+      responseWhere.status = ResponseStatus.COMPLETED;
     }
 
     if (startDate || endDate) {

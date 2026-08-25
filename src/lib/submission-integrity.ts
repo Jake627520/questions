@@ -1,73 +1,118 @@
 import crypto from "crypto";
 
-const DEFAULT_IP_SALT = process.env.SESSION_SECRET || "enterprise_survey_ip_salt_2026";
+const DEFAULT_IP_SALT = "survey-response-privacy-salt-2026-v1";
+export const IP_HASH_VERSION = "v1";
 
 /**
- * 將使用者 IP 透過 HMAC-SHA256 進行單向雜湊以保障隱私 (Privacy-Preserving IP Hashing)
- * 既能用於防刷票與重放關聯分析，又符合 GDPR / 個人資料去識別化規範
+ * 標準化 IP 位址 (Canonicalize IPv4 / IPv6)
+ */
+export function normalizeIp(ip: string | undefined | null): string {
+  if (!ip) return "unknown";
+  let normalized = ip.trim().toLowerCase();
+
+  // 若包含 IPv6-mapped IPv4 前綴 (例如 ::ffff:192.168.1.1)，移除前綴
+  if (normalized.startsWith("::ffff:")) {
+    normalized = normalized.substring(7);
+  }
+
+  return normalized;
+}
+
+/**
+ * 使用 HMAC-SHA256 對標準化後的 IP 進行單向去識別化雜湊
+ * 支援透過環境變數 RESPONSE_IP_HMAC_SECRET 進行 Secret Rotation
  */
 export function hashClientIp(
-  ip?: string | null,
-  salt: string = DEFAULT_IP_SALT
-): string | null {
-  if (!ip || ip.trim().length === 0) {
-    return null;
+  ip: string | undefined | null,
+  customSecret?: string
+): { hash: string; version: string } {
+  const secret =
+    customSecret ||
+    process.env.RESPONSE_IP_HMAC_SECRET ||
+    DEFAULT_IP_SALT;
+
+  const normalized = normalizeIp(ip);
+  if (normalized === "unknown") {
+    return { hash: "unknown", version: IP_HASH_VERSION };
   }
-  const cleanIp = ip.trim().toLowerCase();
-  return crypto.createHmac("sha256", salt).update(cleanIp).digest("hex");
+
+  const hash = crypto
+    .createHmac("sha256", secret)
+    .update(normalized)
+    .digest("hex");
+
+  return { hash, version: IP_HASH_VERSION };
 }
 
 /**
- * 驗證冪等金鑰格式 (Idempotency Key Validation)
- * 允許 UUID、CUID 或英數字串，長度限制 8 ~ 64 字元
+ * 冪等金鑰格式校驗 (8 ~ 128 字元，僅允許字母、數字、底線與連字號)
  */
-export function validateIdempotencyKey(key?: string | null): boolean {
-  if (!key || typeof key !== "string") {
-    return false;
-  }
+export function validateIdempotencyKey(key: string | undefined | null): boolean {
+  if (!key || typeof key !== "string") return false;
   const trimmed = key.trim();
-  if (trimmed.length < 8 || trimmed.length > 64) {
-    return false;
-  }
-  // 僅允許英數、連字號與底線
-  return /^[a-zA-Z0-9_\-]+$/.test(trimmed);
+  if (trimmed.length < 8 || trimmed.length > 128) return false;
+  return /^[a-zA-Z0-9_-]+$/.test(trimmed);
 }
 
 /**
- * 計算作答耗時 (秒數)
+ * 計算作答內容之確定性 Payload 雜湊值 (用於偵測相同 Key 但不同 Payload 的非法重用)
+ */
+export function calculatePayloadHash(answers: any[]): string {
+  if (!Array.isArray(answers)) return "";
+
+  // 依照 questionCode / questionId 排序，確保 JSON 結構確定性
+  const normalizedAnswers = [...answers]
+    .map((a) => {
+      const qIdentifier = a.questionCode || a.questionId || "";
+      const val = a.value !== undefined ? a.value : a.rawValue;
+      const choices = Array.isArray(a.choiceIds) ? [...a.choiceIds].sort() : undefined;
+      return {
+        q: String(qIdentifier),
+        v: val !== undefined ? JSON.stringify(val) : "",
+        c: choices,
+        t: a.textValue || "",
+      };
+    })
+    .sort((a, b) => a.q.localeCompare(b.q));
+
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(normalizedAnswers))
+    .digest("hex");
+}
+
+/**
+ * 計算填答耗時 (秒)
  */
 export function calculateFillingDuration(
-  startedAt?: Date | string | null,
-  submittedAt: Date = new Date()
+  startedAt: Date | string | undefined | null,
+  submittedAt: Date
 ): number | null {
-  if (!startedAt) {
-    return null;
-  }
-  const start = new Date(startedAt);
-  if (isNaN(start.getTime())) {
-    return null;
-  }
-  const diffMs = submittedAt.getTime() - start.getTime();
-  if (diffMs < 0) {
-    return 0;
-  }
-  return Math.floor(diffMs / 1000);
+  if (!startedAt) return null;
+  const start = typeof startedAt === "string" ? new Date(startedAt) : startedAt;
+  if (isNaN(start.getTime())) return null;
+
+  const durationMs = submittedAt.getTime() - start.getTime();
+  if (durationMs < 0) return 0; // 時鐘偏差防禦
+  return Math.min(Math.floor(durationMs / 1000), 86400 * 30); // 上限 30 天
 }
 
 /**
- * 從 HTTP Request 擷取真實客戶端 IP
+ * 從請求中解析 Client IP
  */
-export function extractClientIp(req: Request): string | null {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const firstIp = forwarded.split(",")[0].trim();
-    if (firstIp) return firstIp;
+export function extractClientIp(req: Request): string {
+  const xForwardedFor = req.headers.get("x-forwarded-for");
+  if (xForwardedFor) {
+    const parts = xForwardedFor.split(",");
+    if (parts.length > 0 && parts[0].trim()) {
+      return parts[0].trim();
+    }
   }
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
 
-  const cfIp = req.headers.get("cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
+  const xRealIp = req.headers.get("x-real-ip");
+  if (xRealIp && xRealIp.trim()) {
+    return xRealIp.trim();
+  }
 
-  return null;
+  return "127.0.0.1";
 }

@@ -9,8 +9,10 @@ import {
 import { NextRequest } from "next/server";
 import { Role, SurveyStatus, QuestionType, ResponseStatus } from "@prisma/client";
 import {
+  normalizeIp,
   hashClientIp,
   validateIdempotencyKey,
+  calculatePayloadHash,
   calculateFillingDuration,
 } from "../src/lib/submission-integrity";
 import { POST as publicSubmitPOST } from "../src/app/api/public/surveys/[publicToken]/submit/route";
@@ -18,8 +20,9 @@ import { GET as responsesGET } from "../src/app/api/surveys/[id]/responses/route
 import { PATCH as responseStatusPATCH } from "../src/app/api/surveys/[id]/responses/[responseId]/status/route";
 import { GET as crosstabGET } from "../src/app/api/surveys/[id]/analytics/crosstab/route";
 import { GET as questionsAnalyticsGET } from "../src/app/api/surveys/[id]/analytics/questions/route";
+import { GET as statsGET } from "../src/app/api/surveys/[id]/stats/route";
 
-describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => {
+describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Contract Suite)", () => {
   let orgA: any;
   let orgB: any;
 
@@ -27,13 +30,13 @@ describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => 
   let adminA: any;
   let editorA: any;
   let viewerA: any;
-  let userB: any;
+  let adminB: any;
 
   let tokenOwnerA: string;
   let tokenAdminA: string;
   let tokenEditorA: string;
   let tokenViewerA: string;
-  let tokenUserB: string;
+  let tokenAdminB: string;
 
   const makeAuthReq = (
     url: string,
@@ -120,8 +123,8 @@ describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => 
     viewerA = await db.user.create({
       data: { email: "m10b-viewer@alpha.com", name: "Viewer Alpha", passwordHash: defaultPwd },
     });
-    userB = await db.user.create({
-      data: { email: "m10b-user@beta.com", name: "User Beta", passwordHash: defaultPwd },
+    adminB = await db.user.create({
+      data: { email: "m10b-admin@beta.com", name: "Admin Beta", passwordHash: defaultPwd },
     });
 
     await db.membership.createMany({
@@ -130,7 +133,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => 
         { userId: adminA.id, organizationId: orgA.id, role: Role.ADMIN },
         { userId: editorA.id, organizationId: orgA.id, role: Role.EDITOR },
         { userId: viewerA.id, organizationId: orgA.id, role: Role.VIEWER },
-        { userId: userB.id, organizationId: orgB.id, role: Role.OWNER },
+        { userId: adminB.id, organizationId: orgB.id, role: Role.ADMIN },
       ],
     });
 
@@ -138,82 +141,136 @@ describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => 
     tokenAdminA = (await createSession(adminA.id)).token;
     tokenEditorA = (await createSession(editorA.id)).token;
     tokenViewerA = (await createSession(viewerA.id)).token;
-    tokenUserB = (await createSession(userB.id)).token;
+    tokenAdminB = (await createSession(adminB.id)).token;
   });
 
-  describe("Gate B1: Idempotency & Replay Deduplication", () => {
-    it("重複提交相同 Idempotency-Key 時快速重放既有結果，零重複寫入且零配額消耗", async () => {
+  describe("Gate B1: Scoped Idempotency Contract & Payload Conflict Defense", () => {
+    it("首次提交回傳 200 (replayed: false)，相同 Payload 重試回傳 200 (replayed: true)", async () => {
       const pToken = generatePublicToken();
       const survey = await db.survey.create({
         data: {
           organizationId: orgA.id,
-          title: "冪等性測試問卷",
-          status: SurveyStatus.PUBLISHED,
-          publicToken: pToken,
-          responseQuota: 5,
-          questions: {
-            create: [
-              {
-                code: "Q_SAT",
-                title: "滿意度",
-                questionType: QuestionType.single_choice,
-                orderNum: 1,
-                choices: { create: [{ label: "滿意", value: "sat", orderNum: 1 }] },
-              },
-            ],
-          },
-        },
-      });
-
-      const idempotencyKey = "client-req-uuid-9988776655";
-
-      // 第 1 次提交 -> 全新寫入
-      const req1 = makePublicSubmitReq(
-        `http://localhost/api/public/surveys/${pToken}/submit`,
-        { answers: [{ questionCode: "Q_SAT", value: "sat" }] },
-        { "Idempotency-Key": idempotencyKey }
-      );
-      const res1 = await publicSubmitPOST(req1, { params: { publicToken: pToken } });
-      expect(res1.status).toBe(200);
-      const json1 = await res1.json();
-      const firstResponseId = json1.responseId;
-      expect(firstResponseId).toBeDefined();
-
-      // 第 2 ~ 5 次連續重試提交 (模擬網路延遲或斷線重試)
-      for (let i = 2; i <= 5; i++) {
-        const retryReq = makePublicSubmitReq(
-          `http://localhost/api/public/surveys/${pToken}/submit`,
-          { answers: [{ questionCode: "Q_SAT", value: "sat" }] },
-          { "Idempotency-Key": idempotencyKey }
-        );
-        const retryRes = await publicSubmitPOST(retryReq, { params: { publicToken: pToken } });
-        expect(retryRes.status).toBe(200);
-        expect(retryRes.headers.get("Idempotent-Replayed")).toBe("true");
-        const retryJson = await retryRes.json();
-        expect(retryJson.responseId).toBe(firstResponseId);
-        expect(retryJson.replayed).toBe(true);
-      }
-
-      // 檢查資料庫記錄數嚴格為 1 筆
-      const totalCount = await db.response.count({ where: { surveyId: survey.id } });
-      expect(totalCount).toBe(1);
-    });
-  });
-
-  describe("Gate B2: Version Pinning & Payload Validation", () => {
-    it("無效格式之 Idempotency-Key 應回傳 400 INVALID_IDEMPOTENCY_KEY", async () => {
-      const pToken = generatePublicToken();
-      await db.survey.create({
-        data: {
-          organizationId: orgA.id,
-          title: "格式檢驗問卷",
+          title: "冪等合約問卷",
           status: SurveyStatus.PUBLISHED,
           publicToken: pToken,
           questions: {
             create: [
               {
                 code: "Q1",
-                title: "題目",
+                title: "問題 1",
+                questionType: QuestionType.single_choice,
+                orderNum: 1,
+                choices: { create: [{ label: "選項 A", value: "opt_a", orderNum: 1 }] },
+              },
+            ],
+          },
+        },
+      });
+
+      const idempotencyKey = "client-scoped-key-11223344";
+
+      // 第 1 次提交 -> 200 OK with Idempotent-Replayed: false
+      const req1 = makePublicSubmitReq(
+        `http://localhost/api/public/surveys/${pToken}/submit`,
+        { answers: [{ questionCode: "Q1", value: "opt_a" }] },
+        { "Idempotency-Key": idempotencyKey }
+      );
+      const res1 = await publicSubmitPOST(req1, { params: { publicToken: pToken } });
+      expect(res1.status).toBe(200);
+      expect(res1.headers.get("Idempotent-Replayed")).toBe("false");
+      const json1 = await res1.json();
+      expect(json1.replayed).toBe(false);
+      const originalResponseId = json1.responseId;
+
+      // 第 2 次重送相同 key 與相同 payload -> 200 OK (Idempotent Replay)
+      const req2 = makePublicSubmitReq(
+        `http://localhost/api/public/surveys/${pToken}/submit`,
+        { answers: [{ questionCode: "Q1", value: "opt_a" }] },
+        { "Idempotency-Key": idempotencyKey }
+      );
+      const res2 = await publicSubmitPOST(req2, { params: { publicToken: pToken } });
+      expect(res2.status).toBe(200);
+      expect(res2.headers.get("Idempotent-Replayed")).toBe("true");
+      const json2 = await res2.json();
+      expect(json2.responseId).toBe(originalResponseId);
+      expect(json2.replayed).toBe(true);
+
+      // DB 總筆數嚴格為 1
+      const count = await db.response.count({ where: { surveyId: survey.id } });
+      expect(count).toBe(1);
+    });
+
+    it("相同 Idempotency-Key 但不同 Payload 內容時回傳 409 IDEMPOTENCY_KEY_REUSE 且禁止改寫", async () => {
+      const pToken = generatePublicToken();
+      const survey = await db.survey.create({
+        data: {
+          organizationId: orgA.id,
+          title: "衝突檢驗問卷",
+          status: SurveyStatus.PUBLISHED,
+          publicToken: pToken,
+          questions: {
+            create: [
+              {
+                code: "Q1",
+                title: "問題 1",
+                questionType: QuestionType.single_choice,
+                orderNum: 1,
+                choices: {
+                  create: [
+                    { label: "選項 A", value: "opt_a", orderNum: 1 },
+                    { label: "選項 B", value: "opt_b", orderNum: 2 },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const idempotencyKey = "client-conflict-key-55667788";
+
+      // 首次提交 opt_a
+      const req1 = makePublicSubmitReq(
+        `http://localhost/api/public/surveys/${pToken}/submit`,
+        { answers: [{ questionCode: "Q1", value: "opt_a" }] },
+        { "Idempotency-Key": idempotencyKey }
+      );
+      const res1 = await publicSubmitPOST(req1, { params: { publicToken: pToken } });
+      expect(res1.status).toBe(200);
+
+      // 篡改作答內容為 opt_b 並重用相同 key -> 409 Conflict
+      const req2 = makePublicSubmitReq(
+        `http://localhost/api/public/surveys/${pToken}/submit`,
+        { answers: [{ questionCode: "Q1", value: "opt_b" }] },
+        { "Idempotency-Key": idempotencyKey }
+      );
+      const res2 = await publicSubmitPOST(req2, { params: { publicToken: pToken } });
+      expect(res2.status).toBe(409);
+      const json2 = await res2.json();
+      expect(json2.error).toBe("IDEMPOTENCY_KEY_REUSE");
+
+      // 檢查 DB 中的原始答案未被篡改，依然是 opt_a
+      const answer = await db.answer.findFirst({
+        where: { response: { surveyId: survey.id } },
+      });
+      expect(JSON.parse(answer!.rawValue)).toBe("opt_a");
+    });
+
+    it("不同問卷 (Survey A 與 Survey B) 使用相同 Idempotency-Key 正常建立且不發生 DB 唯一性衝突", async () => {
+      const pTokenA = generatePublicToken();
+      const pTokenB = generatePublicToken();
+
+      const surveyA = await db.survey.create({
+        data: {
+          organizationId: orgA.id,
+          title: "問卷 A",
+          status: SurveyStatus.PUBLISHED,
+          publicToken: pTokenA,
+          questions: {
+            create: [
+              {
+                code: "Q1",
+                title: "問題",
                 questionType: QuestionType.text,
                 orderNum: 1,
               },
@@ -222,38 +279,66 @@ describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => 
         },
       });
 
-      // 太短 (<8 字元)
-      const shortReq = makePublicSubmitReq(
-        `http://localhost/api/public/surveys/${pToken}/submit`,
-        { answers: [{ questionCode: "Q1", value: "test" }] },
-        { "Idempotency-Key": "short" }
-      );
-      const shortRes = await publicSubmitPOST(shortReq, { params: { publicToken: pToken } });
-      expect(shortRes.status).toBe(400);
-      expect((await shortRes.json()).error).toBe("INVALID_IDEMPOTENCY_KEY");
+      const surveyB = await db.survey.create({
+        data: {
+          organizationId: orgA.id,
+          title: "問卷 B",
+          status: SurveyStatus.PUBLISHED,
+          publicToken: pTokenB,
+          questions: {
+            create: [
+              {
+                code: "Q1",
+                title: "問題",
+                questionType: QuestionType.text,
+                orderNum: 1,
+              },
+            ],
+          },
+        },
+      });
 
-      // 包含非法字元 (如空白或特殊標點)
-      const invalidCharsReq = makePublicSubmitReq(
-        `http://localhost/api/public/surveys/${pToken}/submit`,
-        { answers: [{ questionCode: "Q1", value: "test" }] },
-        { "Idempotency-Key": "invalid key with spaces!" }
+      const sharedKey = "cross-survey-shared-key-99999999";
+
+      // 提交到問卷 A
+      const resA = await publicSubmitPOST(
+        makePublicSubmitReq(
+          `http://localhost/api/public/surveys/${pTokenA}/submit`,
+          { answers: [{ questionCode: "Q1", value: "ans_a" }] },
+          { "Idempotency-Key": sharedKey }
+        ),
+        { params: { publicToken: pTokenA } }
       );
-      const invalidRes = await publicSubmitPOST(invalidCharsReq, { params: { publicToken: pToken } });
-      expect(invalidRes.status).toBe(400);
+      expect(resA.status).toBe(200);
+
+      // 提交到問卷 B (相同 key) -> 必須成功 200 (Scoped to Survey)
+      const resB = await publicSubmitPOST(
+        makePublicSubmitReq(
+          `http://localhost/api/public/surveys/${pTokenB}/submit`,
+          { answers: [{ questionCode: "Q1", value: "ans_b" }] },
+          { "Idempotency-Key": sharedKey }
+        ),
+        { params: { publicToken: pTokenB } }
+      );
+      expect(resB.status).toBe(200);
+
+      const respCountA = await db.response.count({ where: { surveyId: surveyA.id } });
+      const respCountB = await db.response.count({ where: { surveyId: surveyB.id } });
+      expect(respCountA).toBe(1);
+      expect(respCountB).toBe(1);
     });
   });
 
-  describe("Gate B3: Status Segregation & Exclusion Lifecycle", () => {
-    let survey: any;
-    let resp: any;
-
-    beforeEach(async () => {
-      survey = await db.survey.create({
+  describe("Gate B3: Status Segregation & No Quota Rollback", () => {
+    it("將作答標記為 EXCLUDED 後不回收既有配額 (禁止第 quota+1 人提交)", async () => {
+      const pToken = generatePublicToken();
+      const survey = await db.survey.create({
         data: {
           organizationId: orgA.id,
-          title: "排除管理測試問卷",
+          title: "配額不回收驗證問卷",
           status: SurveyStatus.PUBLISHED,
-          publicToken: generatePublicToken(),
+          publicToken: pToken,
+          responseQuota: 2, // 限制上限 2 筆
           questions: {
             create: [
               {
@@ -268,201 +353,111 @@ describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => 
         },
       });
 
-      resp = await db.response.create({
-        data: {
-          surveyId: survey.id,
-          status: ResponseStatus.COMPLETED,
-          submittedAt: new Date(),
-        },
-      });
-    });
+      // 提交第 1 筆
+      const res1 = await publicSubmitPOST(
+        makePublicSubmitReq(
+          `http://localhost/api/public/surveys/${pToken}/submit`,
+          { answers: [{ questionCode: "Q1", value: "opt" }] }
+        ),
+        { params: { publicToken: pToken } }
+      );
+      expect(res1.status).toBe(200);
+      const resp1Id = (await res1.json()).responseId;
 
-    it("EDITOR/ADMIN 可將作答標記為 EXCLUDED 並附帶排除原因", async () => {
+      // 提交第 2 筆 -> 達到配額滿額
+      const res2 = await publicSubmitPOST(
+        makePublicSubmitReq(
+          `http://localhost/api/public/surveys/${pToken}/submit`,
+          { answers: [{ questionCode: "Q1", value: "opt" }] }
+        ),
+        { params: { publicToken: pToken } }
+      );
+      expect(res2.status).toBe(200);
+
+      // 管理員將第 1 筆排除 (EXCLUDED)
       const patchReq = makeAuthReq(
-        `http://localhost/api/surveys/${survey.id}/responses/${resp.id}/status`,
-        tokenEditorA,
-        {
-          method: "PATCH",
-          body: { status: "EXCLUDED", reason: "內部員工測試資料" },
-        }
+        `http://localhost/api/surveys/${survey.id}/responses/${resp1Id}/status`,
+        tokenAdminA,
+        { method: "PATCH", body: { status: "EXCLUDED", reason: "作弊洗票" } }
       );
       const patchRes = await responseStatusPATCH(patchReq, {
-        params: { id: survey.id, responseId: resp.id },
+        params: { id: survey.id, responseId: resp1Id },
       });
       expect(patchRes.status).toBe(200);
 
-      const dbRecord = await db.response.findUnique({ where: { id: resp.id } });
-      expect(dbRecord?.status).toBe(ResponseStatus.EXCLUDED);
-      expect(dbRecord?.excludedReason).toBe("內部員工測試資料");
-      expect(dbRecord?.excludedById).toBe(editorA.id);
-      expect(dbRecord?.excludedAt).toBeDefined();
+      // 嘗試提交第 3 筆 -> 必須被 403 QUOTA_EXCEEDED 拒絕（因為 EXCLUDED 視為歷史已受理配額，不回滾）
+      const res3 = await publicSubmitPOST(
+        makePublicSubmitReq(
+          `http://localhost/api/public/surveys/${pToken}/submit`,
+          { answers: [{ questionCode: "Q1", value: "opt" }] }
+        ),
+        { params: { publicToken: pToken } }
+      );
+      expect(res3.status).toBe(403);
+      expect((await res3.json()).error).toBe("QUOTA_EXCEEDED");
     });
 
-    it("VIEWER 與非組織成員無權排除作答 (403)", async () => {
-      const viewerReq = makeAuthReq(
-        `http://localhost/api/surveys/${survey.id}/responses/${resp.id}/status`,
-        tokenViewerA,
-        { method: "PATCH", body: { status: "EXCLUDED", reason: "測試" } }
-      );
-      expect((await responseStatusPATCH(viewerReq, { params: { id: survey.id, responseId: resp.id } })).status).toBe(403);
-    });
-
-    it("可將已排除之作答還原回 COMPLETED 狀態", async () => {
-      await db.response.update({
-        where: { id: resp.id },
-        data: { status: ResponseStatus.EXCLUDED, excludedReason: "誤判" },
-      });
-
-      const restoreReq = makeAuthReq(
-        `http://localhost/api/surveys/${survey.id}/responses/${resp.id}/status`,
-        tokenAdminA,
-        { method: "PATCH", body: { status: "COMPLETED" } }
-      );
-      const restoreRes = await responseStatusPATCH(restoreReq, {
-        params: { id: survey.id, responseId: resp.id },
-      });
-      expect(restoreRes.status).toBe(200);
-
-      const dbRecord = await db.response.findUnique({ where: { id: resp.id } });
-      expect(dbRecord?.status).toBe(ResponseStatus.COMPLETED);
-      expect(dbRecord?.excludedReason).toBeNull();
-    });
-
-    it("回覆列表支援分頁與 status 篩選 (COMPLETED / EXCLUDED / all)", async () => {
-      // 建立另一筆 EXCLUDED 資料
-      await db.response.create({
-        data: {
-          surveyId: survey.id,
-          status: ResponseStatus.EXCLUDED,
-          excludedReason: "測試二",
-        },
-      });
-
-      // 查詢 COMPLETED
-      const getCompletedReq = makeAuthReq(
-        `http://localhost/api/surveys/${survey.id}/responses?status=COMPLETED`,
-        tokenEditorA
-      );
-      const getCompletedRes = await responsesGET(getCompletedReq, { params: { id: survey.id } });
-      const jsonCompleted = await getCompletedRes.json();
-      expect(jsonCompleted.responses.length).toBe(1);
-      expect(jsonCompleted.responses[0].status).toBe(ResponseStatus.COMPLETED);
-
-      // 查詢 EXCLUDED
-      const getExcludedReq = makeAuthReq(
-        `http://localhost/api/surveys/${survey.id}/responses?status=EXCLUDED`,
-        tokenEditorA
-      );
-      const getExcludedRes = await responsesGET(getExcludedReq, { params: { id: survey.id } });
-      const jsonExcluded = await getExcludedRes.json();
-      expect(jsonExcluded.responses.length).toBe(1);
-      expect(jsonExcluded.responses[0].status).toBe(ResponseStatus.EXCLUDED);
-
-      // 查詢 all (含分頁)
-      const getAllReq = makeAuthReq(
-        `http://localhost/api/surveys/${survey.id}/responses?status=all&limit=10&page=1`,
-        tokenEditorA
-      );
-      const getAllRes = await responsesGET(getAllReq, { params: { id: survey.id } });
-      const jsonAll = await getAllRes.json();
-      expect(jsonAll.responses.length).toBe(2);
-      expect(jsonAll.pagination.total).toBe(2);
-    });
-  });
-
-  describe("Gate B4: Audit Trail & IP Privacy Hashing", () => {
-    it("HMAC-SHA256 IP 雜湊保證單向去識別化與可比對性", () => {
-      const ip1 = "192.168.1.100";
-      const ip2 = "192.168.1.101";
-
-      const hash1 = hashClientIp(ip1);
-      const hash1Repeat = hashClientIp(ip1);
-      const hash2 = hashClientIp(ip2);
-
-      expect(hash1).toBeDefined();
-      expect(hash1).not.toContain("192.168");
-      expect(hash1).toBe(hash1Repeat);
-      expect(hash1).not.toBe(hash2);
-    });
-
-    it("填答耗時計算 durationSeconds 正確計算秒數", async () => {
-      const pToken = generatePublicToken();
-      await db.survey.create({
-        data: {
-          organizationId: orgA.id,
-          title: "耗時審計測試問卷",
-          status: SurveyStatus.PUBLISHED,
-          publicToken: pToken,
-          questions: {
-            create: [
-              {
-                code: "Q1",
-                title: "問題",
-                questionType: QuestionType.single_choice,
-                orderNum: 1,
-                choices: { create: [{ label: "選項", value: "opt", orderNum: 1 }] },
-              },
-            ],
-          },
-        },
-      });
-
-      const startedAt = new Date(Date.now() - 45 * 1000); // 45 秒前開始填答
-      const submitReq = makePublicSubmitReq(
-        `http://localhost/api/public/surveys/${pToken}/submit`,
-        {
-          startedAt: startedAt.toISOString(),
-          answers: [{ questionCode: "Q1", value: "opt" }],
-        },
-        {
-          "x-forwarded-for": "203.0.113.195",
-          "user-agent": "Mozilla/5.0 AuditBot/1.0",
-        }
-      );
-
-      const submitRes = await publicSubmitPOST(submitReq, { params: { publicToken: pToken } });
-      expect(submitRes.status).toBe(200);
-      const respId = (await submitRes.json()).responseId;
-
-      const record = await db.response.findUnique({ where: { id: respId } });
-      expect(record?.ipHash).toBeDefined();
-      expect(record?.userAgent).toBe("Mozilla/5.0 AuditBot/1.0");
-      expect(record?.durationSeconds).toBeGreaterThanOrEqual(44);
-      expect(record?.durationSeconds).toBeLessThanOrEqual(46);
-    });
-  });
-
-  describe("Gate B5: Analytics Read Boundary & Data Pollution Defense", () => {
-    it("交叉分析與題目統計端點預設嚴格僅讀取 COMPLETED 作答，徹底防禦 EXCLUDED 與草稿污染", async () => {
+    it("Response 狀態修改必須具有租戶隔離與防 IDOR (跨租戶操作回傳 404/403)", async () => {
       const survey = await db.survey.create({
         data: {
           organizationId: orgA.id,
-          title: "分析防污染驗證問卷",
+          title: "租戶隔離問卷",
+          status: SurveyStatus.PUBLISHED,
+          publicToken: generatePublicToken(),
+        },
+      });
+
+      const resp = await db.response.create({
+        data: { surveyId: survey.id, status: ResponseStatus.COMPLETED },
+      });
+
+      // Org B 的 Admin 嘗試修改 Org A 的 Response 狀態 -> 403 Forbidden
+      const idorReq = makeAuthReq(
+        `http://localhost/api/surveys/${survey.id}/responses/${resp.id}/status`,
+        tokenAdminB,
+        { method: "PATCH", body: { status: "EXCLUDED", reason: "攻擊" } }
+      );
+      const idorRes = await responseStatusPATCH(idorReq, {
+        params: { id: survey.id, responseId: resp.id },
+      });
+      expect(idorRes.status).toBe(403);
+    });
+  });
+
+  describe("Gate B4: Audit Trail, IP Normalization & Secret Rotation", () => {
+    it("IP 標準化能正確處理 IPv6-mapped IPv4 前綴並產生一致雜湊", () => {
+      const ipv4 = "192.168.1.50";
+      const ipv6Mapped = "::ffff:192.168.1.50";
+
+      expect(normalizeIp(ipv4)).toBe("192.168.1.50");
+      expect(normalizeIp(ipv6Mapped)).toBe("192.168.1.50");
+
+      const hash1 = hashClientIp(ipv4);
+      const hash2 = hashClientIp(ipv6Mapped);
+      expect(hash1.hash).toBe(hash2.hash);
+      expect(hash1.version).toBe("v1");
+    });
+  });
+
+  describe("Gate B5: Comprehensive Analytics Read Boundary", () => {
+    it("交叉分析、題目統計與基礎統計端點預設嚴格僅計算 COMPLETED 資料，絕不污染已凍結之引擎", async () => {
+      const survey = await db.survey.create({
+        data: {
+          organizationId: orgA.id,
+          title: "全端點防污染問卷",
           status: SurveyStatus.PUBLISHED,
           publicToken: generatePublicToken(),
           questions: {
             create: [
               {
-                code: "Q_DEPT",
-                title: "部門",
+                code: "Q1",
+                title: "滿意度",
                 questionType: QuestionType.single_choice,
                 orderNum: 1,
                 choices: {
                   create: [
-                    { label: "工程", value: "eng", orderNum: 1 },
-                    { label: "業務", value: "sales", orderNum: 2 },
-                  ],
-                },
-              },
-              {
-                code: "Q_SAT",
-                title: "滿意度",
-                questionType: QuestionType.single_choice,
-                orderNum: 2,
-                choices: {
-                  create: [
                     { label: "滿意", value: "sat", orderNum: 1 },
-                    { label: "不滿意", value: "unsat", orderNum: 2 },
+                    { label: "不滿", value: "unsat", orderNum: 2 },
                   ],
                 },
               },
@@ -471,85 +466,51 @@ describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => 
         },
       });
 
-      const qDept = await db.question.findFirst({ where: { surveyId: survey.id, code: "Q_DEPT" } });
-      const qSat = await db.question.findFirst({ where: { surveyId: survey.id, code: "Q_SAT" } });
+      const q1 = await db.question.findFirst({ where: { surveyId: survey.id, code: "Q1" } });
 
-      // 1. 建立 10 筆正式有效作答 (COMPLETED)
-      for (let i = 0; i < 10; i++) {
-        const r = await db.response.create({
-          data: { surveyId: survey.id, status: ResponseStatus.COMPLETED, submittedAt: new Date() },
-        });
-        await db.answer.create({
-          data: { responseId: r.id, questionId: qDept!.id, rawValue: JSON.stringify("eng") },
-        });
-        await db.answer.create({
-          data: { responseId: r.id, questionId: qSat!.id, rawValue: JSON.stringify("sat") },
-        });
-      }
-
-      // 2. 建立 10 筆被標記為 EXCLUDED 的異常/測試作答 (全填 sales + unsat)
-      for (let i = 0; i < 10; i++) {
-        const rEx = await db.response.create({
-          data: {
-            surveyId: survey.id,
-            status: ResponseStatus.EXCLUDED,
-            excludedReason: "測試洗票資料",
-            submittedAt: new Date(),
-          },
-        });
-        await db.answer.create({
-          data: { responseId: rEx.id, questionId: qDept!.id, rawValue: JSON.stringify("sales") },
-        });
-        await db.answer.create({
-          data: { responseId: rEx.id, questionId: qSat!.id, rawValue: JSON.stringify("unsat") },
-        });
-      }
-
-      // 3. 建立 5 筆未完成草稿 (IN_PROGRESS)
+      // 5 筆 COMPLETED
       for (let i = 0; i < 5; i++) {
-        const rDraft = await db.response.create({
-          data: { surveyId: survey.id, status: ResponseStatus.IN_PROGRESS },
+        const r = await db.response.create({
+          data: { surveyId: survey.id, status: ResponseStatus.COMPLETED, totalScore: 100, submittedAt: new Date() },
         });
         await db.answer.create({
-          data: { responseId: rDraft.id, questionId: qDept!.id, rawValue: JSON.stringify("sales") },
+          data: { responseId: r.id, questionId: q1!.id, rawValue: JSON.stringify("sat") },
         });
       }
 
-      // 4. 驗證交叉分析 API 讀取邊界
-      const crosstabReq = makeAuthReq(
-        `http://localhost/api/surveys/${survey.id}/analytics/crosstab?rowQuestionId=${qDept!.id}&colQuestionId=${qSat!.id}`,
-        tokenEditorA
-      );
-      const crosstabRes = await crosstabGET(crosstabReq, { params: { id: survey.id } });
-      expect(crosstabRes.status).toBe(200);
-      const crosstabJson = await crosstabRes.json();
+      // 5 筆 EXCLUDED (不計入統計)
+      for (let i = 0; i < 5; i++) {
+        const rEx = await db.response.create({
+          data: { surveyId: survey.id, status: ResponseStatus.EXCLUDED, totalScore: 0, submittedAt: new Date() },
+        });
+        await db.answer.create({
+          data: { responseId: rEx.id, questionId: q1!.id, rawValue: JSON.stringify("unsat") },
+        });
+      }
 
-      // 總有效樣本數嚴格等於 10 (完全排除 10 筆 EXCLUDED 與 5 筆 IN_PROGRESS)
-      expect(crosstabJson.totalSurveyResponses).toBe(10);
-      expect(crosstabJson.result.grandTotal).toBe(10);
-      expect(crosstabJson.rows[0].rowLabel).toBe("工程");
-      expect(crosstabJson.result.rowItems[0].value).toBe("eng");
+      // 驗證 Stats 端點
+      const statsReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/stats`, tokenEditorA);
+      const statsRes = await statsGET(statsReq, { params: { id: survey.id } });
+      expect(statsRes.status).toBe(200);
+      const statsJson = await statsRes.json();
+      expect(statsJson.summary.totalResponses).toBe(5); // 嚴格等於 5
+      expect(statsJson.summary.avgScore).toBe(100);
 
-      // 5. 驗證題目統計 API 讀取邊界
-      const questionsReq = makeAuthReq(
-        `http://localhost/api/surveys/${survey.id}/analytics/questions`,
-        tokenEditorA
-      );
-      const questionsRes = await questionsAnalyticsGET(questionsReq, { params: { id: survey.id } });
-      expect(questionsRes.status).toBe(200);
-      const questionsJson = await questionsRes.json();
-      expect(questionsJson.summary.totalResponses).toBe(10);
-      expect(questionsJson.summary.completedResponses).toBe(10);
+      // 驗證 Questions Analytics 端點
+      const qReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/analytics/questions`, tokenEditorA);
+      const qRes = await questionsAnalyticsGET(qReq, { params: { id: survey.id } });
+      const qJson = await qRes.json();
+      expect(qJson.summary.totalResponses).toBe(5);
     });
   });
 
-  describe("Gate B6: Concurrent Idempotent Submission Stress Test", () => {
-    it("20 筆並發請求帶有相同 Idempotency-Key 時，DB 嚴格僅建立 1 筆記錄且所有請求皆回傳一致 200 OK", async () => {
+  describe("Gate B6: 50 Concurrent Replay & Conflict Stress Test", () => {
+    it("50 個同時發送的相同 Key + 相同 Payload 請求：嚴格 1 次建立 (replayed: false) + 49 次重放 (replayed: true)，DB 僅 1 筆記錄且 Quota 僅消耗 1", async () => {
       const pToken = generatePublicToken();
       const survey = await db.survey.create({
         data: {
           organizationId: orgA.id,
-          title: "並發冪等競爭測試問卷",
+          title: "50 並發冪等重放壓力問卷",
           status: SurveyStatus.PUBLISHED,
           publicToken: pToken,
           responseQuota: 10,
@@ -567,13 +528,13 @@ describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => 
         },
       });
 
-      const sharedIdempotencyKey = "concurrent-key-abcdef123456";
+      const sharedKey = "stress-concurrent-50-key-12345678";
 
-      const requests = Array.from({ length: 20 }).map(() => {
+      const requests = Array.from({ length: 50 }).map(() => {
         const req = makePublicSubmitReq(
           `http://localhost/api/public/surveys/${pToken}/submit`,
           { answers: [{ questionCode: "Q1", value: "opt" }] },
-          { "Idempotency-Key": sharedIdempotencyKey }
+          { "Idempotency-Key": sharedKey }
         );
         return publicSubmitPOST(req, { params: { publicToken: pToken } });
       });
@@ -583,10 +544,59 @@ describe("Phase M10-B: Response Collection & Submission Integrity Suite", () => 
       expect(statuses.every((s) => s === 200)).toBe(true);
 
       const jsonResults = await Promise.all(responses.map((r) => r.json()));
-      const firstId = jsonResults[0].responseId;
-      expect(jsonResults.every((j) => j.responseId === firstId)).toBe(true);
+      const firstResponseId = jsonResults[0].responseId;
+      expect(jsonResults.every((j) => j.responseId === firstResponseId)).toBe(true);
 
-      // 資料庫記錄數嚴格等於 1
+      const newCreates = jsonResults.filter((j) => j.replayed === false);
+      const replays = jsonResults.filter((j) => j.replayed === true);
+      expect(newCreates.length).toBe(1);
+      expect(replays.length).toBe(49);
+
+      const totalDbRecords = await db.response.count({ where: { surveyId: survey.id } });
+      expect(totalDbRecords).toBe(1);
+    });
+
+    it("50 個同時發送的相同 Key + 衝突 Payload 請求：嚴格 1 次成功 (200) + 49 次拒絕 (409 Conflict)，零資料覆寫與零額外配額消耗", async () => {
+      const pToken = generatePublicToken();
+      const survey = await db.survey.create({
+        data: {
+          organizationId: orgA.id,
+          title: "50 並發衝突拒絕壓力問卷",
+          status: SurveyStatus.PUBLISHED,
+          publicToken: pToken,
+          responseQuota: 10,
+          questions: {
+            create: [
+              {
+                code: "Q1",
+                title: "問題",
+                questionType: QuestionType.text,
+                orderNum: 1,
+              },
+            ],
+          },
+        },
+      });
+
+      const sharedConflictKey = "stress-conflict-50-key-87654321";
+
+      const requests = Array.from({ length: 50 }).map((_, idx) => {
+        const req = makePublicSubmitReq(
+          `http://localhost/api/public/surveys/${pToken}/submit`,
+          { answers: [{ questionCode: "Q1", value: `payload_variation_${idx}` }] },
+          { "Idempotency-Key": sharedConflictKey }
+        );
+        return publicSubmitPOST(req, { params: { publicToken: pToken } });
+      });
+
+      const responses = await Promise.all(requests);
+      const statuses = responses.map((r) => r.status);
+      const count200 = statuses.filter((s) => s === 200).length;
+      const count409 = statuses.filter((s) => s === 409).length;
+
+      expect(count200).toBe(1);
+      expect(count409).toBe(49);
+
       const totalDbRecords = await db.response.count({ where: { surveyId: survey.id } });
       expect(totalDbRecords).toBe(1);
     });

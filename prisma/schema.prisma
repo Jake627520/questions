@@ -265,8 +265,10 @@ model Response {
   surveyId        String         @map("survey_id")
   version         Int            @default(1)
   status          ResponseStatus @default(COMPLETED)
-  idempotencyKey  String?        @unique @map("idempotency_key")
+  idempotencyKey  String?        @map("idempotency_key")
+  payloadHash     String?        @map("payload_hash")
   ipHash          String?        @map("ip_hash")
+  ipHashVersion   String?        @default("v1") @map("ip_hash_version")
   userAgent       String?        @map("user_agent") @db.Text
   durationSeconds Int?           @map("duration_seconds")
   startedAt       DateTime?      @map("started_at")
@@ -282,6 +284,7 @@ model Response {
   survey  Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   answers Answer[]
 
+  @@unique([surveyId, idempotencyKey])
   @@index([surveyId])
   @@index([surveyId, status])
   @@index([surveyId, submittedAt])
