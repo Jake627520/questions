@@ -601,4 +601,218 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
       expect(totalDbRecords).toBe(1);
     });
   });
+
+  describe("Gate B7: Release Hardening, Migration Correctness & Security Audit", () => {
+    it("B7.1 Migration Correctness: 多筆 idempotencyKey 為 NULL 之歷史資料在 composite unique 下可共存且不受干擾", async () => {
+      const survey = await db.survey.create({
+        data: {
+          organizationId: orgA.id,
+          title: "歷史資料相容問卷",
+          status: SurveyStatus.PUBLISHED,
+          publicToken: generatePublicToken(),
+        },
+      });
+
+      // 模擬未有 idempotencyKey 的 5 筆舊資料
+      for (let i = 0; i < 5; i++) {
+        await db.response.create({
+          data: {
+            surveyId: survey.id,
+            idempotencyKey: null,
+            status: ResponseStatus.COMPLETED,
+          },
+        });
+      }
+
+      const totalNullKeyResponses = await db.response.count({
+        where: { surveyId: survey.id, idempotencyKey: null },
+      });
+      expect(totalNullKeyResponses).toBe(5);
+    });
+
+    it("B7.2 Idempotency Failure Matrix: 驗證失敗 (422) 不消耗冪等槽位，修正後重試相同 Key 可順利完成", async () => {
+      const pToken = generatePublicToken();
+      await db.survey.create({
+        data: {
+          organizationId: orgA.id,
+          title: "驗證失敗不鎖死 Key 問卷",
+          status: SurveyStatus.PUBLISHED,
+          publicToken: pToken,
+          questions: {
+            create: [
+              {
+                code: "Q_REQ",
+                title: "必填題目",
+                questionType: QuestionType.single_choice,
+                required: true,
+                orderNum: 1,
+                choices: { create: [{ label: "選項 A", value: "opt_a", orderNum: 1 }] },
+              },
+            ],
+          },
+        },
+      });
+
+      const failureKey = "failure-matrix-key-111222333";
+
+      // 1. 傳送非法空作答 -> 422 Unprocessable Entity
+      const reqFail = makePublicSubmitReq(
+        `http://localhost/api/public/surveys/${pToken}/submit`,
+        { answers: [] }, // 漏填必填題
+        { "Idempotency-Key": failureKey }
+      );
+      const resFail = await publicSubmitPOST(reqFail, { params: { publicToken: pToken } });
+      expect(resFail.status).toBe(422);
+
+      // 2. 修正為正確作答並重送相同 Key -> 成功 200 (未被消耗鎖死)
+      const reqSuccess = makePublicSubmitReq(
+        `http://localhost/api/public/surveys/${pToken}/submit`,
+        { answers: [{ questionCode: "Q_REQ", value: "opt_a" }] },
+        { "Idempotency-Key": failureKey }
+      );
+      const resSuccess = await publicSubmitPOST(reqSuccess, { params: { publicToken: pToken } });
+      expect(resSuccess.status).toBe(200);
+      expect((await resSuccess.json()).replayed).toBe(false);
+    });
+
+    it("B7.3 Deep Payload Canonicalization: 題目順序不同、選擇陣列順序不同與 Unicode 等價字元均產出相同 Hash", () => {
+      // 題目順序交換
+      const answersA = [
+        { questionCode: "Q1", value: "A" },
+        { questionCode: "Q2", value: "B" },
+      ];
+      const answersB = [
+        { questionCode: "Q2", value: "B" },
+        { questionCode: "Q1", value: "A" },
+      ];
+      expect(calculatePayloadHash(answersA)).toBe(calculatePayloadHash(answersB));
+
+      // 複選題 choiceIds 順序交換
+      const choicesA = [{ questionCode: "Q1", choiceIds: ["c2", "c1"] }];
+      const choicesB = [{ questionCode: "Q1", choiceIds: ["c1", "c2"] }];
+      expect(calculatePayloadHash(choicesA)).toBe(calculatePayloadHash(choicesB));
+
+      // Unicode NFC 等價 (é)
+      const unicodeA = [{ questionCode: "Q1", value: "caf\u00e9" }];
+      const unicodeB = [{ questionCode: "Q1", value: "cafe\u0301" }];
+      expect(calculatePayloadHash(unicodeA)).toBe(calculatePayloadHash(unicodeB));
+    });
+
+    it("B7.4 HMAC Secret Security: 必須為 Secret Keyed HMAC 雜湊，且不同 Secret 雜湊結果不同", () => {
+      const ip = "203.0.113.10";
+      const resDefault = hashClientIp(ip);
+      const resSecretB = hashClientIp(ip, "rotated-secret-key-2027");
+
+      expect(resDefault.hash).not.toBe(resSecretB.hash);
+      expect(resDefault.version).toBe("v1");
+      expect(resSecretB.version).toBe("v1");
+    });
+
+    it("B7.5 Analytics Contamination Regression: 100 COMPLETED + 20 EXCLUDED 混合資料下，所有分析端點嚴格為 100，配額嚴格為 120", async () => {
+      const survey = await db.survey.create({
+        data: {
+          organizationId: orgA.id,
+          title: "100+20 領域分離母體驗證問卷",
+          status: SurveyStatus.PUBLISHED,
+          publicToken: generatePublicToken(),
+          responseQuota: 150,
+          questions: {
+            create: [
+              {
+                code: "Q1",
+                title: "問題 1",
+                questionType: QuestionType.single_choice,
+                orderNum: 1,
+                choices: {
+                  create: [
+                    { label: "選項 A", value: "opt_a", orderNum: 1 },
+                    { label: "選項 B", value: "opt_b", orderNum: 2 },
+                  ],
+                },
+              },
+              {
+                code: "Q2",
+                title: "問題 2",
+                questionType: QuestionType.single_choice,
+                orderNum: 2,
+                choices: {
+                  create: [
+                    { label: "滿意", value: "sat", orderNum: 1 },
+                    { label: "不滿", value: "unsat", orderNum: 2 },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const q1 = await db.question.findFirst({ where: { surveyId: survey.id, code: "Q1" } });
+      const q2 = await db.question.findFirst({ where: { surveyId: survey.id, code: "Q2" } });
+
+      // 寫入 100 筆 COMPLETED
+      for (let i = 0; i < 100; i++) {
+        const r = await db.response.create({
+          data: { surveyId: survey.id, status: ResponseStatus.COMPLETED, totalScore: 100, submittedAt: new Date() },
+        });
+        await db.answer.create({
+          data: { responseId: r.id, questionId: q1!.id, rawValue: JSON.stringify("opt_a") },
+        });
+        await db.answer.create({
+          data: { responseId: r.id, questionId: q2!.id, rawValue: JSON.stringify("sat") },
+        });
+      }
+
+      // 寫入 20 筆 EXCLUDED (干擾母體)
+      for (let i = 0; i < 20; i++) {
+        const rEx = await db.response.create({
+          data: {
+            surveyId: survey.id,
+            status: ResponseStatus.EXCLUDED,
+            excludedReason: "測試洗票",
+            totalScore: 0,
+            submittedAt: new Date(),
+          },
+        });
+        await db.answer.create({
+          data: { responseId: rEx.id, questionId: q1!.id, rawValue: JSON.stringify("opt_b") },
+        });
+        await db.answer.create({
+          data: { responseId: rEx.id, questionId: q2!.id, rawValue: JSON.stringify("unsat") },
+        });
+      }
+
+      // 1. 驗證 Stats 端點
+      const statsReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/stats`, tokenEditorA);
+      const statsRes = await statsGET(statsReq, { params: { id: survey.id } });
+      const statsJson = await statsRes.json();
+      expect(statsJson.summary.totalResponses).toBe(100); // 嚴格等於 100，零污染
+      expect(statsJson.summary.avgScore).toBe(100);
+
+      // 2. 驗證 Question Analytics 端點
+      const qReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/analytics/questions`, tokenEditorA);
+      const qRes = await questionsAnalyticsGET(qReq, { params: { id: survey.id } });
+      const qJson = await qRes.json();
+      expect(qJson.summary.totalResponses).toBe(100);
+
+      // 3. 驗證 Crosstab 端點
+      const crossReq = makeAuthReq(
+        `http://localhost/api/surveys/${survey.id}/analytics/crosstab?rowQuestionId=${q1!.id}&colQuestionId=${q2!.id}`,
+        tokenEditorA
+      );
+      const crossRes = await crosstabGET(crossReq, { params: { id: survey.id } });
+      const crossJson = await crossRes.json();
+      expect(crossJson.totalSurveyResponses).toBe(100);
+      expect(crossJson.result.grandTotal).toBe(100);
+
+      // 4. 驗證配額計算母體：累計歷史已受理 (COMPLETED + EXCLUDED) 嚴格為 120
+      const totalQuotaConsumed = await db.response.count({
+        where: {
+          surveyId: survey.id,
+          status: { in: [ResponseStatus.COMPLETED, ResponseStatus.EXCLUDED] },
+        },
+      });
+      expect(totalQuotaConsumed).toBe(120);
+    });
+  });
 });

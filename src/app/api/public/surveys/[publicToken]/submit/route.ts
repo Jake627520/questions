@@ -193,7 +193,11 @@ export async function POST(
       })),
     }));
 
-    const answersInput = answers || [];
+    const answersInput = (answers || []).map((a: any) => ({
+      questionCode: a.questionCode,
+      rawValue: a.rawValue !== undefined ? a.rawValue : a.value,
+      otherText: a.otherText,
+    }));
 
     // 執行核心防呆、條件跳題與計分驗證
     const evaluation = evaluateSurveySubmission(engineQuestions, answersInput);

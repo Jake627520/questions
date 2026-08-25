@@ -55,29 +55,66 @@ export function validateIdempotencyKey(key: string | undefined | null): boolean 
 }
 
 /**
- * 計算作答內容之確定性 Payload 雜湊值 (用於偵測相同 Key 但不同 Payload 的非法重用)
+ * 深度規範化任意值 (遞迴排序物件鍵、排序字串陣列、Unicode NFC 標準化)
+ */
+function canonicalizeValue(val: any): any {
+  if (val === null || val === undefined) {
+    return null;
+  }
+  if (typeof val === "string") {
+    return val.normalize("NFC");
+  }
+  if (typeof val === "number" || typeof val === "boolean") {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    // 若為字串或數字陣列，進行自然排序以達成順序無關性
+    const isScalarArray = val.every(
+      (item) => typeof item === "string" || typeof item === "number"
+    );
+    const mapped = val.map(canonicalizeValue);
+    if (isScalarArray) {
+      return mapped.sort((a, b) => String(a).localeCompare(String(b)));
+    }
+    return mapped;
+  }
+  if (typeof val === "object") {
+    const sortedKeys = Object.keys(val).sort();
+    const result: Record<string, any> = {};
+    for (const k of sortedKeys) {
+      result[k] = canonicalizeValue(val[k]);
+    }
+    return result;
+  }
+  return String(val);
+}
+
+/**
+ * 計算作答內容之確定性 Payload 雜湊值 (Deep Canonicalization SHA-256)
+ * 保證相同語意資料在 JSON key 順序不同、選擇順序不同或 Unicode 等價時產生完全相同的雜湊值
  */
 export function calculatePayloadHash(answers: any[]): string {
   if (!Array.isArray(answers)) return "";
 
-  // 依照 questionCode / questionId 排序，確保 JSON 結構確定性
-  const normalizedAnswers = [...answers]
+  const canonicalAnswers = [...answers]
     .map((a) => {
-      const qIdentifier = a.questionCode || a.questionId || "";
+      const qIdentifier = String(a.questionCode || a.questionId || "").normalize("NFC");
       const val = a.value !== undefined ? a.value : a.rawValue;
-      const choices = Array.isArray(a.choiceIds) ? [...a.choiceIds].sort() : undefined;
+      const choices = Array.isArray(a.choiceIds) ? a.choiceIds : undefined;
+      const other = a.otherText || a.textValue || undefined;
+
       return {
-        q: String(qIdentifier),
-        v: val !== undefined ? JSON.stringify(val) : "",
-        c: choices,
-        t: a.textValue || "",
+        q: qIdentifier,
+        v: canonicalizeValue(val),
+        c: choices ? canonicalizeValue(choices) : null,
+        o: other ? String(other).normalize("NFC") : null,
       };
     })
     .sort((a, b) => a.q.localeCompare(b.q));
 
   return crypto
     .createHash("sha256")
-    .update(JSON.stringify(normalizedAnswers))
+    .update(JSON.stringify(canonicalAnswers))
     .digest("hex");
 }
 
