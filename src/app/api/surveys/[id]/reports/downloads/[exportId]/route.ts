@@ -20,66 +20,85 @@ import {
   buildExecutiveWorkbook,
   buildExecutiveCsv,
 } from "@/lib/report-engine";
-import { recordExportAudit } from "@/lib/report-governance";
+import { isExportExpired } from "@/lib/report-governance";
 
 interface RouteParams {
   params: {
     id: string;
+    exportId: string;
   };
 }
 
 /**
- * GET /api/surveys/[id]/reports/export
- * 匯出高階主管標準報表 (Excel .xlsx / CSV .csv)
- * 權限要求：僅限 EDITOR, MANAGER, ADMIN, OWNER 執行匯出 (Viewer 唯讀阻絕 403)
+ * GET /api/surveys/[id]/reports/downloads/[exportId]
+ * 下載指定歷史匯出檔案 (Download-time Authorization & Expiry Check)
+ * 權限要求：僅限 EDITOR, MANAGER, ADMIN, OWNER (Viewer 阻絕 403)
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const auth = await getCurrentUser(req);
     if (!auth) {
-      return unauthorizedResponse("請先登入以匯出報告");
+      return unauthorizedResponse("請先登入以下載報告");
     }
 
-    const { id } = params;
-    const { searchParams } = new URL(req.url);
-    const format = (searchParams.get("format") || "xlsx").toLowerCase();
-    const timeRange = searchParams.get("timeRange") || "all";
-    const dateFromParam = searchParams.get("dateFrom");
-    const dateToParam = searchParams.get("dateTo");
-    const statusParam = searchParams.get("status") || "COMPLETED";
+    const { id, exportId } = params;
 
-    // 1. 查詢問卷基本資訊
-    const survey = await db.survey.findUnique({
-      where: { id },
+    // 1. 查詢匯出審計紀錄
+    const exportRecord = await db.reportExport.findUnique({
+      where: { id: exportId },
       include: {
-        questions: {
-          orderBy: { orderNum: "asc" },
+        survey: {
           include: {
-            choices: {
+            questions: {
               orderBy: { orderNum: "asc" },
+              include: {
+                choices: {
+                  orderBy: { orderNum: "asc" },
+                },
+              },
             },
           },
         },
       },
     });
 
-    if (!survey) {
+    if (!exportRecord || exportRecord.surveyId !== id) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "找不到該問卷" },
+        { error: "NOT_FOUND", message: "找不到該匯出紀錄" },
         { status: 404 }
       );
     }
 
-    // 2. 驗證 Membership 與 RBAC 匯出權限 (僅 EDITORS 以上角色允許)
-    const { allowed, membership } = await hasRole(auth.user.id, survey.organizationId, ROLES.EDITORS);
+    // 2. 下載當下重新驗證 Membership 與 RBAC (Download-time Authorization)
+    const { allowed, membership } = await hasRole(auth.user.id, exportRecord.organizationId, ROLES.EDITORS);
     if (!membership) {
-      return forbiddenResponse("您非該組織成員，無權匯出此問卷的報告");
+      return forbiddenResponse("您非該組織成員，無權下載此報告");
     }
     if (!allowed) {
-      return forbiddenResponse("檢視者角色 (Viewer) 僅具備線上查閱權限，無權執行報表匯出");
+      return forbiddenResponse("檢視者角色 (Viewer) 無權下載匯出檔案");
     }
 
-    // 3. 建構時間過濾條件
+    // 3. 檢查產物是否已過期失效 (Retention & Expiration Guard)
+    if (isExportExpired(exportRecord)) {
+      return NextResponse.json(
+        { error: "ARTIFACT_EXPIRED", message: "該匯出檔案已過期失效 (410 Gone)" },
+        { status: 410 }
+      );
+    }
+
+    // 4. 遞增下載計數 (Download Audit)
+    await db.reportExport.update({
+      where: { id: exportId },
+      data: { downloadCount: { increment: 1 } },
+    });
+
+    // 5. 透過同一套 Sanitized Report DTO Pipeline 重新產出檔案
+    const survey = exportRecord.survey;
+    const timeRange = exportRecord.timeRange || "all";
+    const dateFromParam = exportRecord.dateFrom;
+    const dateToParam = exportRecord.dateTo;
+    const statusParam = "COMPLETED";
+
     let dateFilter: { gte?: Date; lte?: Date } | undefined = undefined;
     const now = new Date();
 
@@ -100,7 +119,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // 4. 統計填答數
     const [completedCount, inProgressCount, completedResponses] = await Promise.all([
       db.response.count({
         where: {
@@ -167,7 +185,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       averageScore: avgScore,
     });
 
-    // 5. 產出 Question Analytics DTO
     const questionsDto = analyzeSurveyQuestions(
       survey.questions.map((q) => ({
         id: q.id,
@@ -203,7 +220,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       completionRate: kpis.completionRate,
     });
 
-    // 6. 產出標準 Sanitized Report DTO (作為唯一的匯出輸入源)
     const reportDto = generateExecutiveReportDTO({
       survey: {
         id: survey.id,
@@ -224,62 +240,37 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     });
 
     const safeTitle = survey.title.replace(/[/\\?%*:|"<>]/g, "_");
-    const dateStamp = new Date().toISOString().split("T")[0];
+    const dateStamp = exportRecord.createdAt.toISOString().split("T")[0];
 
-    // 7. 根據格式輸出並記錄審計 (Zero-PII Audit)
-    if (format === "csv") {
+    if (exportRecord.format === "csv") {
       const csvContent = buildExecutiveCsv(reportDto);
-      const auditRecord = await recordExportAudit({
-        organizationId: survey.organizationId,
-        surveyId: survey.id,
-        actorId: auth.user.id,
-        actorRole: membership.role,
-        format: "csv",
-        timeRange,
-        dateFrom: dateFromParam,
-        dateTo: dateToParam,
-        fileSize: Buffer.byteLength(csvContent, "utf8"),
-      });
-
       return new NextResponse(csvContent, {
         status: 200,
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
           "Content-Disposition": `attachment; filename="${encodeURIComponent(safeTitle)}_Executive_Report_${dateStamp}.csv"`,
-          "X-Export-Id": auditRecord.id,
-          "X-Expires-At": auditRecord.expiresAt.toISOString(),
+          "X-Export-Id": exportRecord.id,
+          "X-Download-Count": String(exportRecord.downloadCount + 1),
         },
       });
     }
 
-    // 預設: XLSX 多工作表
     const workbook = await buildExecutiveWorkbook(reportDto);
     const buffer = await workbook.xlsx.writeBuffer();
-    const auditRecord = await recordExportAudit({
-      organizationId: survey.organizationId,
-      surveyId: survey.id,
-      actorId: auth.user.id,
-      actorRole: membership.role,
-      format: "xlsx",
-      timeRange,
-      dateFrom: dateFromParam,
-      dateTo: dateToParam,
-      fileSize: buffer.byteLength,
-    });
 
     return new NextResponse(buffer as any, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(safeTitle)}_Executive_Report_${dateStamp}.xlsx"`,
-        "X-Export-Id": auditRecord.id,
-        "X-Expires-At": auditRecord.expiresAt.toISOString(),
+        "X-Export-Id": exportRecord.id,
+        "X-Download-Count": String(exportRecord.downloadCount + 1),
       },
     });
   } catch (error: any) {
-    console.error("[Report Export Error]:", error);
+    console.error("[Report Download Error]:", error);
     return NextResponse.json(
-      { error: "INTERNAL_ERROR", message: "匯出報告失敗，請稍後重試" },
+      { error: "INTERNAL_ERROR", message: "下載報告失敗，請稍後重試" },
       { status: 500 }
     );
   }

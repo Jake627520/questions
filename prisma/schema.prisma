@@ -58,6 +58,7 @@ model User {
   sessions            Session[]
   invitations         Invitation[]         @relation("InvitationCreator")
   passwordResetTokens PasswordResetToken[]
+  reportExports       ReportExport[]
 
   @@map("users")
 }
@@ -103,6 +104,7 @@ model Organization {
   surveys       Survey[]
   surveyImports SurveyImport[]
   invitations   Invitation[]
+  reportExports ReportExport[]
 
   @@map("organizations")
 }
@@ -170,6 +172,7 @@ model Survey {
   questions     Question[]
   responses     Response[]
   surveyImports SurveyImport[]
+  reportExports ReportExport[]
 
   @@index([organizationId])
   @@map("surveys")
@@ -321,4 +324,32 @@ model AnswerChoice {
   @@index([answerId])
   @@index([choiceId])
   @@map("answer_choices")
+}
+
+model ReportExport {
+  id                  String   @id @default(cuid())
+  organizationId      String   @map("organization_id")
+  surveyId            String   @map("survey_id")
+  actorId             String   @map("actor_id")
+  actorRole           Role     @map("actor_role")
+  format              String   // xlsx, csv, json
+  status              String   @default("COMPLETED") // COMPLETED, FAILED, EXPIRED
+  timeRange           String?  @map("time_range")
+  dateFrom            String?  @map("date_from")
+  dateTo              String?  @map("date_to")
+  reportSchemaVersion String   @default("v1.0.0") @map("report_schema_version")
+  fileSize            Int?     @map("file_size")
+  downloadCount       Int      @default(0) @map("download_count")
+  expiresAt           DateTime @map("expires_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  survey       Survey       @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User         @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([surveyId])
+  @@index([actorId])
+  @@index([expiresAt])
+  @@map("report_exports")
 }
