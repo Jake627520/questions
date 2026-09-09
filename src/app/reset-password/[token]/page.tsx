@@ -112,7 +112,7 @@ export default function ResetPasswordPage() {
         <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-6 h-6" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 mb-2">重設密碼連結失效</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-2 font-serif">重設密碼連結失效</h2>
         <p className="text-sm text-slate-500 mb-6">{tokenError}</p>
         <Link
           href="/forgot-password"
@@ -131,7 +131,7 @@ export default function ResetPasswordPage() {
           <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
             <KeyRound className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">設定新密碼</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight font-serif">設定新密碼</h1>
           <p className="text-sm text-slate-500 mt-1">
             請輸入並確認您要設定的新密碼
           </p>

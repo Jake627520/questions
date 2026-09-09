@@ -103,7 +103,7 @@ export default function SurveyResponsesPage() {
             <span>返回問卷列表</span>
           </Link>
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold text-slate-900">回覆與草稿管理</h1>
+            <h1 className="text-2xl font-bold text-slate-900 font-serif">回覆與草稿管理</h1>
             <span className="text-xs px-2.5 py-0.5 bg-blue-50 text-blue-700 font-semibold rounded-full">
               v{surveyVersion}
             </span>

@@ -248,7 +248,7 @@ export default function HomePage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">問卷工作區</h1>
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight font-serif">問卷工作區</h1>
             {activeOrgName && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
                 <Building2 className="w-3.5 h-3.5" />
@@ -420,7 +420,7 @@ export default function HomePage() {
           <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <FileSpreadsheet className="w-7 h-7" />
           </div>
-          <h3 className="text-lg font-bold text-slate-900">
+          <h3 className="text-lg font-bold text-slate-900 font-serif">
             {searchQuery || statusFilter !== "ALL" ? "查無符合條件的問卷" : "工作區內尚無問卷"}
           </h3>
           <p className="text-sm text-slate-500 mt-1.5 max-w-md mx-auto">
@@ -769,7 +769,7 @@ export default function HomePage() {
               <CheckCircle2 className="w-6 h-6" />
             </div>
 
-            <h3 className="text-lg font-bold text-slate-900">確認發布問卷？</h3>
+            <h3 className="text-lg font-bold text-slate-900 font-serif">確認發布問卷？</h3>
             <p className="text-xs text-slate-500 mt-1">
               問卷即將上線並對外開放公開填答
             </p>
@@ -845,7 +845,7 @@ export default function HomePage() {
               <Lock className="w-6 h-6" />
             </div>
 
-            <h3 className="text-lg font-bold text-slate-900">確認關閉此問卷？</h3>
+            <h3 className="text-lg font-bold text-slate-900 font-serif">確認關閉此問卷？</h3>
             <p className="text-xs text-slate-500 mt-1">
               將停止對外公開填答，現有已送出的填答記錄與統計仍會完整保留
             </p>
@@ -914,7 +914,7 @@ export default function HomePage() {
               <RotateCcw className="w-6 h-6" />
             </div>
 
-            <h3 className="text-lg font-bold text-slate-900">重新開啟問卷？</h3>
+            <h3 className="text-lg font-bold text-slate-900 font-serif">重新開啟問卷？</h3>
             <p className="text-xs text-slate-500 mt-1">
               重新開啟後，問卷將恢復為 PUBLISHED 狀態並繼續接受填答者送出回答
             </p>
@@ -973,7 +973,7 @@ export default function HomePage() {
               <Share2 className="w-6 h-6" />
             </div>
 
-            <h3 className="text-lg font-bold text-slate-900">公開填答連結與 QR Code</h3>
+            <h3 className="text-lg font-bold text-slate-900 font-serif">公開填答連結與 QR Code</h3>
             <p className="text-xs text-slate-500 mt-1">
               將此專屬公開代碼提供給受訪者填答（安全隱私保護，不包含管理權限）
             </p>
@@ -1062,7 +1062,7 @@ export default function HomePage() {
                 <GitBranch className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">問卷版本歷程與溯源</h3>
+                <h3 className="text-lg font-bold text-slate-900 font-serif">問卷版本歷程與溯源</h3>
                 <p className="text-xs text-slate-500">
                   追溯此問卷家族自根版本 (Root Version) 至最新版本的演進脈絡
                 </p>

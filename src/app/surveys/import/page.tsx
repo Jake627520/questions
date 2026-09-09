@@ -286,7 +286,7 @@ export default function ImportSurveyPage() {
           </div>
 
           <div className="space-y-1">
-            <h1 className="text-2xl font-bold text-slate-900">🎉 題庫問卷匯入成功！</h1>
+            <h1 className="text-2xl font-bold text-slate-900 font-serif">🎉 題庫問卷匯入成功！</h1>
             <p className="text-sm text-slate-500">
               問卷已成功儲存至系統資料庫（Transaction Commit），隨時可發布與收集填答。
             </p>
@@ -378,7 +378,7 @@ export default function ImportSurveyPage() {
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 font-serif">
             <FileSpreadsheet className="w-7 h-7 text-blue-600" />
             <span>Excel XLSX 匯入題庫</span>
           </h1>
@@ -826,7 +826,7 @@ export default function ImportSurveyPage() {
           {/* 題目明細列表 */}
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2">
+              <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2 font-serif">
                 <List className="w-5 h-5 text-blue-600" />
                 <span>題目明細預覽 (共 {previewData.length} 題)</span>
               </h3>

@@ -305,7 +305,7 @@ export default function PublicSurveyPage() {
           <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-6 h-6" />
           </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">無法載入問卷</h2>
+          <h2 className="text-xl font-bold text-slate-900 mb-2 font-serif">無法載入問卷</h2>
           <p className="text-slate-600 text-sm mb-6">{error || "問卷可能不存在或已結束"}</p>
         </div>
       </div>
@@ -333,7 +333,7 @@ export default function PublicSurveyPage() {
       <main className="max-w-3xl mx-auto px-4 pt-8">
         {/* 問卷標題區塊 */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 mb-8 shadow-sm">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-3">{survey.title}</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-3 font-serif">{survey.title}</h1>
           {survey.description && (
             <p className="text-slate-600 text-sm sm:text-base whitespace-pre-line leading-relaxed">
               {survey.description}
@@ -358,7 +358,7 @@ export default function PublicSurveyPage() {
                     {index + 1}
                   </span>
                   <div className="flex-1">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug font-serif">
                       {q.title}
                       {q.required && <span className="text-rose-500 ml-1.5">*</span>}
                     </h3>

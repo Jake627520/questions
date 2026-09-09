@@ -322,7 +322,7 @@ export default function TeamSettingsPage() {
     return (
       <div className="max-w-xl mx-auto my-12 p-8 bg-white rounded-2xl border border-slate-200 text-center shadow-sm">
         <Building2 className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-        <h2 className="text-lg font-bold text-slate-800">尚未選擇或加入任何工作區</h2>
+        <h2 className="text-lg font-bold text-slate-800 font-serif">尚未選擇或加入任何工作區</h2>
         <p className="text-sm text-slate-500 mt-1 mb-6">請使用頂部工作區切換器建立新工作區或加入團隊</p>
       </div>
     );
@@ -334,7 +334,7 @@ export default function TeamSettingsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">團隊協作與成員權限</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight font-serif">團隊協作與成員權限</h1>
             {currentUserRole && (
               <span
                 className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border ${

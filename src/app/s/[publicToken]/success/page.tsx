@@ -10,7 +10,7 @@ export default function PublicSurveySuccessPage() {
         <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-6">
           <CheckCircle2 className="w-10 h-10" />
         </div>
-        <h1 className="text-2xl font-extrabold text-slate-900 mb-2">問卷提交成功</h1>
+        <h1 className="text-2xl font-extrabold text-slate-900 mb-2 font-serif">問卷提交成功</h1>
         <p className="text-slate-600 text-sm leading-relaxed mb-8">
           感謝您的寶貴時間與填答，您的意見已安全儲存。
         </p>

@@ -158,7 +158,7 @@ export default function AccountPage() {
     <div className="max-w-4xl mx-auto px-4 py-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">個人帳號管理 (Account Center)</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight font-serif">個人帳號管理 (Account Center)</h1>
           <p className="text-sm text-slate-500 mt-1">檢視個人身份資訊、組織成員權限與密碼安全設定</p>
         </div>
         <button
@@ -177,7 +177,7 @@ export default function AccountPage() {
             <div className="w-16 h-16 rounded-2xl bg-blue-600 text-white font-bold text-2xl flex items-center justify-center mb-4 shadow-md shadow-blue-500/20">
               {user.name ? user.name.slice(0, 1).toUpperCase() : user.email.slice(0, 1).toUpperCase()}
             </div>
-            <h2 className="text-lg font-bold text-slate-900">{user.name || "未設定稱呼"}</h2>
+            <h2 className="text-lg font-bold text-slate-900 font-serif">{user.name || "未設定稱呼"}</h2>
             <p className="text-sm text-slate-500 font-mono break-all">{user.email}</p>
           </div>
 

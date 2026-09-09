@@ -35,7 +35,7 @@ export default function SubmissionSuccessPage() {
         </div>
 
         <div className="space-y-2">
-          <h1 className="text-2xl font-black text-slate-900">問卷提交成功！</h1>
+          <h1 className="text-2xl font-black text-slate-900 font-serif">問卷提交成功！</h1>
           <p className="text-sm text-slate-600">
             感謝您的參與，我們已完整記錄您的寶貴作答內容。
           </p>

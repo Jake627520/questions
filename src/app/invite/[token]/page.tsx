@@ -121,7 +121,7 @@ export default function AcceptInvitationPage() {
         <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-6 h-6" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 mb-2">無效的邀請</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-2 font-serif">無效的邀請</h2>
         <p className="text-sm text-slate-500 mb-6">{errorMsg}</p>
         <Link
           href="/"
@@ -148,7 +148,7 @@ export default function AcceptInvitationPage() {
           <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
             <Building2 className="w-6 h-6" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight font-serif">
             工作區成員邀請
           </h1>
           <p className="text-sm text-slate-500 mt-1">

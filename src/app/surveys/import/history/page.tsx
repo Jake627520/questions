@@ -111,7 +111,7 @@ export default function ImportHistoryPage() {
               <span>返回 Excel 題庫匯入</span>
             </Link>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 mt-1 font-serif">
             <FileSpreadsheet className="w-7 h-7 text-indigo-600" />
             <span>Excel 題庫匯入歷史與稽核紀錄</span>
           </h1>
@@ -325,7 +325,7 @@ export default function ImportHistoryPage() {
                 <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
                   {selectedRecord.importId}
                 </span>
-                <h3 className="font-bold text-slate-900 text-lg mt-1">匯入紀錄稽核詳情</h3>
+                <h3 className="font-bold text-slate-900 text-lg mt-1 font-serif">匯入紀錄稽核詳情</h3>
               </div>
               <button
                 onClick={() => setSelectedRecord(null)}

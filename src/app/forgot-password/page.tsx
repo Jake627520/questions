@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
           <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
             <Shield className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">忘記密碼</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight font-serif">忘記密碼</h1>
           <p className="text-sm text-slate-500 mt-1">
             請輸入您註冊時使用的電子郵件地址以申請重設密碼
           </p>

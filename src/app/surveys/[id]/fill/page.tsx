@@ -405,7 +405,7 @@ export default function FillSurveyPage() {
             v{survey.version || 1}
           </span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight font-serif">
           {survey.title}
         </h1>
         {survey.description && (

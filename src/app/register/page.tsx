@@ -65,7 +65,7 @@ function RegisterForm() {
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 mb-4 shadow-sm">
           <UserPlus className="w-7 h-7" />
         </div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">建立新帳號</h1>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight font-serif">建立新帳號</h1>
         <p className="text-sm text-slate-500 mt-1.5">建立您的帳號以開始建立問卷並與團隊共同協作</p>
       </div>
 

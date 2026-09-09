@@ -349,7 +349,7 @@ export default function SurveyStatsPage() {
       <div className="print-only mb-6 p-4 border-b-2 border-slate-900 bg-white">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-black text-slate-900">{survey.title}</h1>
+            <h1 className="text-2xl font-black text-slate-900 font-serif">{survey.title}</h1>
             <p className="text-xs text-slate-600 mt-1">
               問卷版本: v{survey.version} | 企業級統計分析與指標報表
             </p>
@@ -373,7 +373,7 @@ export default function SurveyStatsPage() {
             <span>返回問卷工作區</span>
           </Link>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-serif">
               {survey.title}
             </h1>
             <span className="text-xs font-mono font-bold px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-md border border-slate-200">
