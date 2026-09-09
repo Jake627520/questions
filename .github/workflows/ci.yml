@@ -60,3 +60,19 @@ jobs:
         env:
           DATABASE_URL: "postgresql://postgres:postgrespassword@localhost:5432/survey_db?schema=public"
         run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E Golden Paths Gate
+        env:
+          DATABASE_URL: "postgresql://postgres:postgrespassword@localhost:5432/survey_db?schema=public"
+        run: npm run test:e2e
+
+      - name: Upload Playwright Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14

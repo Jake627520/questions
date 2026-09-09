@@ -197,14 +197,26 @@ npm run typecheck
 # 執行 ESLint 語法與代碼風格檢查
 npm run lint
 
-# 執行全套 Vitest 自動化測試 (500 項測試)
+# 執行全套 Vitest 自動化測試 (558 項單元與整合測試)
 npm test
+
+# 執行 Playwright 瀏覽器端對端測試 (8 大 Golden Paths 驗收閘門)
+npm run test:e2e
 
 # 執行生產環境編譯建置
 npm run build
 ```
 
 ### 測試覆蓋範疇：
+- **Playwright 瀏覽器 E2E 驗收閘門 (8 大 Golden Paths)**：
+  - `E2E-01`：登入認證與多租戶主控台導向。
+  - `E2E-02`：問卷生命週期流轉（Excel 匯入 ➔ DRAFT ➔ PUBLISHED ➔ CLOSED ➔ ARCHIVED）。
+  - `E2E-03`：公開問卷填答者旅程（高熵 Token 填答 ➔ 暫存草稿 ➔ 狀態恢復 ➔ 提交）。
+  - `E2E-04`：問卷版本邊界鎖定與 Clone Version 衍生 v2，作答資料嚴格隔離。
+  - `E2E-05`：團隊成員 RBAC 授權與角色動態變更即時反映。
+  - `E2E-06`：Viewer 角色特權防護（UI 操作阻絕與 API 403 攔截）。
+  - `E2E-07`：雙變量統計交叉分析看板、$k=5$ 匿名細格抑制渲染與 Excel 報表匯出。
+  - `E2E-08`：跨租戶瀏覽器隔離與資安迴歸（越權存取阻絕、DOM 與 Network 零資料洩漏）。
 - **交叉分析與統計引擎測試**：卡方檢定、Cramér's V、邊際加總、Lanczos 近似。
 - **隱私逆推與差分攻擊測試**：$k=5$ 門檻抑制、二級互補抑制、多維度交集逆推防禦。
 - **安全迴歸與邊界測試**：Tenant 隔離、RBAC 越權阻絕、IDOR 攻擊模擬、Public Token 邊界。
