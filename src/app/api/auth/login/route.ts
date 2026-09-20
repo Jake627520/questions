@@ -3,9 +3,18 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword, createSession, getSessionCookieOptions } from "@/lib/auth";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { extractClientIp } from "@/lib/submission-integrity";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = extractClientIp(req);
+    const limited = await enforceRateLimit({
+      key: `login:${ip}`,
+      ...RATE_LIMITS.authAttempt,
+    });
+    if (limited) return limited;
+
     const body = await req.json();
     const { email, password } = body;
 

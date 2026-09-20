@@ -8,6 +8,8 @@ import {
   hashPasswordResetToken,
   PASSWORD_RESET_EXPIRY_MINUTES,
 } from "@/lib/auth";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { extractClientIp } from "@/lib/submission-integrity";
 
 /**
  * POST /api/auth/forgot-password
@@ -15,6 +17,13 @@ import {
  */
 export async function POST(req: NextRequest) {
   try {
+    const ip = extractClientIp(req);
+    const limited = await enforceRateLimit({
+      key: `forgot-password:${ip}`,
+      ...RATE_LIMITS.passwordReset,
+    });
+    if (limited) return limited;
+
     const body = await req.json().catch(() => ({}));
     const rawEmail = typeof body.email === "string" ? body.email : "";
     const normalizedEmail = normalizeEmail(rawEmail);

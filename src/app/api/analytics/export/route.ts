@@ -11,6 +11,7 @@ import {
   ROLES,
 } from "@/lib/auth";
 import { generateSurveyExportExcel } from "@/lib/excel-parser";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { ResponseStatus } from "@prisma/client";
 
 /**
@@ -28,6 +29,12 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return unauthorizedResponse();
     }
+
+    const limited = await enforceRateLimit({
+      key: `analytics-export:${auth.user.id}`,
+      ...RATE_LIMITS.export,
+    });
+    if (limited) return limited;
 
     const { searchParams } = new URL(req.url);
     const requestedOrgId = searchParams.get("organizationId");

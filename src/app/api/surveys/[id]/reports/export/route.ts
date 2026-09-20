@@ -21,6 +21,7 @@ import {
   buildExecutiveCsv,
 } from "@/lib/report-engine";
 import { recordExportAudit } from "@/lib/report-governance";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 interface RouteParams {
   params: {
@@ -39,6 +40,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     if (!auth) {
       return unauthorizedResponse("請先登入以匯出報告");
     }
+
+    const limited = await enforceRateLimit({
+      key: `report-export:${auth.user.id}`,
+      ...RATE_LIMITS.export,
+    });
+    if (limited) return limited;
 
     const { id } = params;
     const { searchParams } = new URL(req.url);

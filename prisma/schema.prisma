@@ -353,3 +353,18 @@ model ReportExport {
   @@index([expiresAt])
   @@map("report_exports")
 }
+
+// 跨實例限流計數 (固定視窗)。bucket_key = `${端點key}:${windowStartMs}`。
+// 由 src/lib/rate-limit.ts 的 checkRateLimitDb() 以 INSERT ... ON CONFLICT 原子遞增；
+// 過期列由 api/cron/cleanup 依 expires_at 清除。
+model RateLimitCounter {
+  id          String   @id @default(cuid())
+  bucketKey   String   @unique @map("bucket_key")
+  count       Int      @default(0)
+  windowStart DateTime @map("window_start")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("rate_limit_counters")
+}

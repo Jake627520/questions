@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { ImportStatus, QuestionType, SurveyStatus } from "@prisma/client";
 import { ImportResponse, ValidationIssue } from "@/types/surveyImport";
 import { getCurrentUser, isUserInOrganization, forbiddenResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { extractClientIp } from "@/lib/submission-integrity";
 
 function generateImportId(): string {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -115,6 +117,13 @@ export async function POST(req: NextRequest) {
     let organizationId = requestedOrgId || defaultOrg.id;
 
     const auth = await getCurrentUser(req);
+
+    const limited = await enforceRateLimit({
+      key: `import:${auth?.user.id ?? extractClientIp(req)}`,
+      ...RATE_LIMITS.import,
+    });
+    if (limited) return limited;
+
     if (auth && mode === "save") {
       const { allowed, membership } = await hasRole(auth.user.id, organizationId, ROLES.EDITORS);
       if (!membership) {

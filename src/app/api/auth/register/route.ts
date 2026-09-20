@@ -3,10 +3,19 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { hashPassword, createSession, getSessionCookieOptions } from "@/lib/auth";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { extractClientIp } from "@/lib/submission-integrity";
 import { Role } from "@prisma/client";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = extractClientIp(req);
+    const limited = await enforceRateLimit({
+      key: `register:${ip}`,
+      ...RATE_LIMITS.authAttempt,
+    });
+    if (limited) return limited;
+
     const body = await req.json();
     const { name, email, password, confirmPassword } = body;
 

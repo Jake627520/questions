@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { QuestionInput, ChoiceInput, QuestionType, QuestionTypeEnum } from "./types";
 import { ValidationIssue } from "../types/surveyImport";
+import { escapeFormulaString } from "./excel-formula-safety";
 
 export function parseStrictBoolean(
   val: any,
@@ -669,7 +670,7 @@ export async function generateSurveyExportExcel(data: {
       ? `自訂區間 (${data.filterMeta?.dateFrom || "-"} ~ ${data.filterMeta?.dateTo || "-"})`
       : "全時段 (all)";
 
-  metaSheet.addRow({ prop: "問卷名稱 (Survey Title)", val: data.survey.title });
+  metaSheet.addRow({ prop: "問卷名稱 (Survey Title)", val: escapeFormulaString(data.survey.title) });
   metaSheet.addRow({ prop: "問卷版本 (Version)", val: `v${data.survey.version || 1}` });
   metaSheet.addRow({ prop: "匯出時間 (Export Timestamp)", val: new Date().toLocaleString("zh-TW") });
   metaSheet.addRow({ prop: "匯出操作者 (Exported By)", val: data.filterMeta?.exportedBy || "系統使用者" });
@@ -754,9 +755,9 @@ export async function generateSurveyExportExcel(data: {
         } else if (displayVal === null || displayVal === undefined) {
           displayVal = "-";
         }
-        row[`raw_${q.code}`] = String(displayVal);
+        row[`raw_${q.code}`] = escapeFormulaString(String(displayVal));
         if (q.choices.some((c) => c.isOther)) {
-          row[`other_${q.code}`] = a.otherText || "";
+          row[`other_${q.code}`] = escapeFormulaString(a.otherText || "");
         }
         if (q.scoringEnabled) {
           row[`score_${q.code}`] = a.score !== null && a.score !== undefined ? a.score : "不計分";
@@ -810,8 +811,8 @@ export async function generateSurveyExportExcel(data: {
         if (Array.isArray(displayVal)) {
           displayVal = displayVal.join(", ");
         }
-        rawValStr = String(displayVal);
-        otherTextStr = a.otherText || "";
+        rawValStr = escapeFormulaString(String(displayVal));
+        otherTextStr = escapeFormulaString(a.otherText || "");
         scoreVal = a.score !== null && a.score !== undefined ? a.score : "不計分";
         answerStatus = "有效作答";
       }
@@ -821,7 +822,7 @@ export async function generateSurveyExportExcel(data: {
         status: resp.status === "COMPLETED" ? "已完成" : resp.status === "IN_PROGRESS" ? "填寫中" : "已提交",
         order_num: q.orderNum,
         code: q.code,
-        title: q.title,
+        title: escapeFormulaString(q.title),
         question_type: q.questionType,
         raw_value: rawValStr,
         other_text: otherTextStr,
@@ -867,7 +868,7 @@ export async function generateSurveyExportExcel(data: {
       const dist = s.distribution || s.optionDistribution;
       if (dist && dist.length > 0) {
         summaryDetail = dist
-          .map((opt: any) => `${opt.label}: ${opt.count}次 (${opt.percentage}%)`)
+          .map((opt: any) => `${escapeFormulaString(String(opt.label))}: ${opt.count}次 (${opt.percentage}%)`)
           .join(" | ");
       } else if (s.statistics) {
         const num = s.statistics;
@@ -890,7 +891,7 @@ export async function generateSurveyExportExcel(data: {
     summarySheet.addRow({
       order_num: q.orderNum,
       code: q.code,
-      title: q.title,
+      title: escapeFormulaString(q.title),
       question_type: q.questionType,
       answered_count: answeredCount,
       unanswered_count: unansweredCount,
@@ -930,13 +931,13 @@ export async function generateSurveyExportExcel(data: {
     if (q.choices.length === 0) {
       qSheet.addRow({
         code: q.code,
-        title: q.title,
+        title: escapeFormulaString(q.title),
         question_type: q.questionType,
         required: q.required ? "是" : "否",
         scoring_enabled: q.scoringEnabled ? "是" : "否",
         reverse_score: q.reverseScore ? "是" : "否",
         visibility_rules: q.visibilityRules ? (typeof q.visibilityRules === "string" ? q.visibilityRules : JSON.stringify(q.visibilityRules)) : "-",
-        visibility_hint: q.visibilityHint || "-",
+        visibility_hint: escapeFormulaString(q.visibilityHint || "-"),
         choice_value: "-",
         choice_label: "-",
         choice_score: "-",
@@ -947,15 +948,15 @@ export async function generateSurveyExportExcel(data: {
       q.choices.forEach((c) => {
         qSheet.addRow({
           code: q.code,
-          title: q.title,
+          title: escapeFormulaString(q.title),
           question_type: q.questionType,
           required: q.required ? "是" : "否",
           scoring_enabled: q.scoringEnabled ? "是" : "否",
           reverse_score: q.reverseScore ? "是" : "否",
           visibility_rules: q.visibilityRules ? (typeof q.visibilityRules === "string" ? q.visibilityRules : JSON.stringify(q.visibilityRules)) : "-",
-          visibility_hint: q.visibilityHint || "-",
+          visibility_hint: escapeFormulaString(q.visibilityHint || "-"),
           choice_value: c.value,
-          choice_label: c.label,
+          choice_label: escapeFormulaString(c.label),
           choice_score: c.scoreEnabled ? (c.score !== null ? c.score : 0) : "不計分",
           is_other: c.isOther ? "是" : "否",
           is_none_of_above: c.isNoneOfAbove ? "是" : "否",

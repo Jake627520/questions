@@ -14,6 +14,7 @@ import {
   ProtectedCrossTabResult,
 } from "./analytics";
 import { ExecutiveKPIs, AutomatedInsight } from "./dashboard-intelligence";
+import { escapeFormulaString } from "./excel-formula-safety";
 
 export const REPORT_SCHEMA_VERSION = "v1.0.0";
 export const PRIVACY_POLICY_VERSION = "v1.0-suppression-k5";
@@ -182,11 +183,11 @@ export async function buildExecutiveWorkbook(report: ExecutiveReportDTO): Promis
       for (const d of q.distribution) {
         questionSheet.addRow({
           code: q.code,
-          title: q.title,
+          title: escapeFormulaString(q.title),
           type: q.type,
           answered: q.answeredCount,
           answerRate: `${q.answerRate}%`,
-          optionLabel: d.label,
+          optionLabel: escapeFormulaString(String(d.label)),
           countOrValue: d.count,
           percentageOrSignal: `${d.percentage}%`,
         });
@@ -194,7 +195,7 @@ export async function buildExecutiveWorkbook(report: ExecutiveReportDTO): Promis
     } else if (q.statistics) {
       questionSheet.addRow({
         code: q.code,
-        title: q.title,
+        title: escapeFormulaString(q.title),
         type: q.type,
         answered: q.answeredCount,
         answerRate: `${q.answerRate}%`,
@@ -205,7 +206,7 @@ export async function buildExecutiveWorkbook(report: ExecutiveReportDTO): Promis
     } else {
       questionSheet.addRow({
         code: q.code,
-        title: q.title,
+        title: escapeFormulaString(q.title),
         type: q.type,
         answered: q.answeredCount,
         answerRate: `${q.answerRate}%`,
@@ -225,13 +226,13 @@ export async function buildExecutiveWorkbook(report: ExecutiveReportDTO): Promis
     });
 
     const ct = report.crossTab;
-    const colHeaders = ["分組變項 (Row) \\ 目標變項 (Col)", ...ct.colItems.map((c) => c.label), "列總計 (Row Total)"];
+    const colHeaders = ["分組變項 (Row) \\ 目標變項 (Col)", ...ct.colItems.map((c) => escapeFormulaString(String(c.label))), "列總計 (Row Total)"];
     crossSheet.addRow(colHeaders);
 
     for (let rIdx = 0; rIdx < ct.rowItems.length; rIdx++) {
       const rowItem = ct.rowItems[rIdx];
       const rowCells = ct.matrix[rIdx];
-      const rowValues: (string | number)[] = [rowItem.label];
+      const rowValues: (string | number)[] = [escapeFormulaString(String(rowItem.label))];
 
       for (const cell of rowCells) {
         if (cell.isSuppressed || cell.count === null) {
@@ -298,7 +299,7 @@ export function buildExecutiveCsv(report: ExecutiveReportDTO): string {
 
   const escapeCsv = (val: any): string => {
     if (val === null || val === undefined) return '""';
-    const str = String(val).replace(/"/g, '""');
+    const str = escapeFormulaString(String(val)).replace(/"/g, '""');
     return `"${str}"`;
   };
 
