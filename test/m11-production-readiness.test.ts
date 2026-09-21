@@ -148,6 +148,20 @@ describe("Phase M11: Production Readiness & Operational Governance Audit", () =>
   });
 
   describe("Gate M11.2: Retention Scheduler & Idempotent Cron", () => {
+    it("未設定 CRON_SECRET 時 fail-closed：端點拒絕執行 (503)", async () => {
+      delete process.env.CRON_SECRET;
+
+      const req = new NextRequest("http://localhost/api/cron/cleanup", {
+        method: "POST",
+        headers: { authorization: "Bearer anything" },
+      });
+
+      const res = await cronCleanupPOST(req);
+      expect(res.status).toBe(503);
+      const json = await res.json();
+      expect(json.error).toBe("CRON_NOT_CONFIGURED");
+    });
+
     it("未授權或 Secret 錯誤時回傳 401 Unauthorized", async () => {
       process.env.CRON_SECRET = "super-secure-cron-secret-123";
 
