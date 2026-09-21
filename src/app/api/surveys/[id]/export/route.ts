@@ -12,6 +12,7 @@ import {
   ROLES,
 } from "@/lib/auth";
 import { analyzeSurveyQuestions } from "@/lib/analytics";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function GET(
   req: NextRequest,
@@ -22,6 +23,12 @@ export async function GET(
     if (!auth) {
       return unauthorizedResponse();
     }
+
+    const limited = await enforceRateLimit({
+      key: `export:${auth.user.id}`,
+      ...RATE_LIMITS.export,
+    });
+    if (limited) return limited;
 
     const { id } = params;
     const { searchParams } = new URL(req.url);

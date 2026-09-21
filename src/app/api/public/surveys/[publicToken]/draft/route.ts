@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { AnswerSubmission } from "@/lib/types";
 import { ResponseStatus, SurveyStatus } from "@prisma/client";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { extractClientIp } from "@/lib/submission-integrity";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,12 @@ export async function POST(
 ) {
   try {
     const { publicToken } = params;
+
+    const limited = await enforceRateLimit({
+      key: `draft:${publicToken}:${extractClientIp(req)}`,
+      ...RATE_LIMITS.publicDraft,
+    });
+    if (limited) return limited;
 
     if (!publicToken || publicToken.trim().length === 0) {
       return NextResponse.json(

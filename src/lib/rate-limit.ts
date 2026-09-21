@@ -8,6 +8,8 @@
  */
 
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
+import { db } from "@/lib/db";
 
 interface RateLimitRecord {
   timestamps: number[];
@@ -99,4 +101,88 @@ export function createRateLimitResponse(rateLimitResult: RateLimitResult): NextR
  */
 export function resetRateLimits(): void {
   store.clear();
+}
+
+/* -------------------------------------------------------------------------- */
+/* Persistent (multi-instance) rate limiter                                    */
+/*                                                                            */
+/* 上面的 in-memory 版本在 serverless / 多實例部署 (如 Vercel) 會失效——每個   */
+/* lambda 各有一份 Map。下面這組改用 Postgres 固定視窗計數，跨實例共享，並以   */
+/* 原子的 INSERT ... ON CONFLICT DO UPDATE 遞增避免競態。endpoint 一律用       */
+/* enforceRateLimit()。                                                        */
+/* -------------------------------------------------------------------------- */
+
+/** 各端點的預設限流參數 (可依實測調整) */
+export const RATE_LIMITS = {
+  /** 登入 / 註冊：每 IP 每分鐘 5 次 (防爆破) */
+  authAttempt: { limit: 5, windowMs: 60_000 },
+  /** 忘記密碼：每 IP 每 15 分鐘 3 次 (防信件轟炸) */
+  passwordReset: { limit: 3, windowMs: 15 * 60_000 },
+  /** 公開作答提交：每 token+IP 每分鐘 10 次 (防灌票) */
+  publicSubmit: { limit: 10, windowMs: 60_000 },
+  /** 公開草稿暫存：每 token+IP 每分鐘 30 次 */
+  publicDraft: { limit: 30, windowMs: 60_000 },
+  /** 報表匯出：每使用者每分鐘 20 次 (防資源濫用) */
+  export: { limit: 20, windowMs: 60_000 },
+  /** Excel 匯入：每使用者每分鐘 10 次 */
+  import: { limit: 10, windowMs: 60_000 },
+} as const;
+
+/**
+ * Postgres-backed 固定視窗限流檢查。跨實例共享，原子遞增。
+ * @param key 隔離識別碼 (e.g. `login:${ip}`, `export:${userId}`)
+ */
+export async function checkRateLimitDb(
+  key: string,
+  limit: number,
+  windowMs: number,
+  now = Date.now()
+): Promise<RateLimitResult> {
+  const windowStartMs = Math.floor(now / windowMs) * windowMs;
+  const expiresAtMs = windowStartMs + windowMs;
+  const bucketKey = `${key}:${windowStartMs}`;
+
+  // 原子 upsert + 遞增；ON CONFLICT 確保高併發下不會重複建列或漏算。
+  const rows = await db.$queryRaw<{ count: number }[]>`
+    INSERT INTO rate_limit_counters (id, bucket_key, count, window_start, expires_at, created_at)
+    VALUES (${randomUUID()}, ${bucketKey}, 1, ${new Date(windowStartMs)}, ${new Date(expiresAtMs)}, now())
+    ON CONFLICT (bucket_key) DO UPDATE SET count = rate_limit_counters.count + 1
+    RETURNING count
+  `;
+  const count = Number(rows[0]?.count ?? 1);
+
+  const resetAt = expiresAtMs;
+  const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - now) / 1000));
+  const allowed = count <= limit;
+
+  return {
+    allowed,
+    limit,
+    remaining: Math.max(0, limit - count),
+    resetAt,
+    retryAfterSeconds: allowed ? 0 : retryAfterSeconds,
+  };
+}
+
+/**
+ * endpoint 專用：超限回傳 429 NextResponse，未超限回 null。
+ * 若限流檢查本身出錯 (例如 DB 暫時不可用)，採 fail-open——絕不因限流故障而
+ * 讓正常請求全部 500。
+ */
+export async function enforceRateLimit(opts: {
+  key: string;
+  limit: number;
+  windowMs: number;
+}): Promise<NextResponse | null> {
+  // 測試環境停用「route 層」限流：整合測試以共享 DB + 固定來源 IP 平行執行，
+  // 會在同一個 IP 桶上互相累加造成偽陽性 429。限流邏輯本身仍由
+  // test/security/rate-limit-persistent.test.ts 直接驗證 (含 route wiring 一案)。
+  if (process.env.RATE_LIMIT_DISABLED === "1") return null;
+  try {
+    const result = await checkRateLimitDb(opts.key, opts.limit, opts.windowMs);
+    return result.allowed ? null : createRateLimitResponse(result);
+  } catch (err) {
+    console.error("[rate-limit] persistent check failed, failing open:", err);
+    return null;
+  }
 }

@@ -17,6 +17,8 @@ import {
   applyCrossTabPrivacy,
 } from "@/lib/analytics";
 import { QuestionMeta } from "@/lib/analytics/types";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { escapeFormulaString } from "@/lib/excel-formula-safety";
 
 /**
  * GET /api/surveys/[id]/analytics/crosstab/export
@@ -32,6 +34,12 @@ export async function GET(
     if (!auth) {
       return unauthorizedResponse();
     }
+
+    const limited = await enforceRateLimit({
+      key: `crosstab-export:${auth.user.id}`,
+      ...RATE_LIMITS.export,
+    });
+    if (limited) return limited;
 
     const { id } = params;
     const { searchParams } = new URL(req.url);
@@ -215,9 +223,9 @@ export async function GET(
       const sheet = workbook.addWorksheet(sheetName);
 
       // Meta header
-      sheet.addRow([`${survey.title} - ${titleText}`]);
-      sheet.addRow([`分組變項 (Row)：[${rowQuestion.code}] ${rowQuestion.title}`]);
-      sheet.addRow([`目標變項 (Col)：[${colQuestion.code}] ${colQuestion.title}`]);
+      sheet.addRow([`${escapeFormulaString(survey.title)} - ${titleText}`]);
+      sheet.addRow([`分組變項 (Row)：[${rowQuestion.code}] ${escapeFormulaString(rowQuestion.title)}`]);
+      sheet.addRow([`目標變項 (Col)：[${colQuestion.code}] ${escapeFormulaString(colQuestion.title)}`]);
       sheet.addRow([
         `雙題有效作答樣本 (Valid N)：${protectedResult.grandTotalDisplay} 人 / 問卷總回覆：${protectedResult.totalResponses} 筆`,
       ]);
@@ -229,14 +237,14 @@ export async function GET(
       sheet.getRow(4).font = { size: 10, color: { argb: "FF475569" } };
 
       // Table header
-      const colLabels = protectedResult.colItems.map((c) => `${c.label} (n=${c.displayValue})`);
+      const colLabels = protectedResult.colItems.map((c) => `${escapeFormulaString(String(c.label))} (n=${c.displayValue})`);
       const headerRow = sheet.addRow(["分組選項 \\ 目標選項", ...colLabels, "合計 (Row Total)"]);
       headerRow.font = { bold: true, color: { argb: "FF1E1B4B" } };
       headerRow.fill = headerFill;
 
       // Data rows
       protectedResult.rowItems.forEach((rItem, rIdx) => {
-        const rowData: (string | number)[] = [`${rItem.label} (n=${rItem.displayValue})`];
+        const rowData: (string | number)[] = [`${escapeFormulaString(String(rItem.label))} (n=${rItem.displayValue})`];
         protectedResult.colItems.forEach((_, cIdx) => {
           rowData.push(cellExtractor(rIdx, cIdx));
         });
@@ -297,7 +305,7 @@ export async function GET(
 
     // Sheet 5: 推論統計與檢定 (Inference & Stats)
     const statsSheet = workbook.addWorksheet("推論統計與檢定 (Statistics)");
-    statsSheet.addRow([`${survey.title} - 交叉分析推論統計與獨立性檢定`]);
+    statsSheet.addRow([`${escapeFormulaString(survey.title)} - 交叉分析推論統計與獨立性檢定`]);
     statsSheet.addRow([]);
     statsSheet.getRow(1).font = { bold: true, size: 13, color: { argb: "FF1E293B" } };
 
@@ -356,10 +364,10 @@ export async function GET(
     metaSheet.getRow(1).fill = headerFill;
 
     metaSheet.addRow(["問卷識別碼 (Survey ID)", survey.id]);
-    metaSheet.addRow(["問卷標題 (Survey Title)", survey.title]);
+    metaSheet.addRow(["問卷標題 (Survey Title)", escapeFormulaString(survey.title)]);
     metaSheet.addRow(["問卷版本 (Version)", `v${survey.version}`]);
-    metaSheet.addRow(["分組變項 (Row Dimension)", `[${rowQuestion.code}] ${rowQuestion.title} (${rowQuestion.questionType})`]);
-    metaSheet.addRow(["目標變項 (Col Dimension)", `[${colQuestion.code}] ${colQuestion.title} (${colQuestion.questionType})`]);
+    metaSheet.addRow(["分組變項 (Row Dimension)", `[${rowQuestion.code}] ${escapeFormulaString(rowQuestion.title)} (${rowQuestion.questionType})`]);
+    metaSheet.addRow(["目標變項 (Col Dimension)", `[${colQuestion.code}] ${escapeFormulaString(colQuestion.title)} (${colQuestion.questionType})`]);
     metaSheet.addRow(["匯出時間 (Export Timestamp)", new Date().toISOString()]);
     metaSheet.addRow(["時間篩選 (Time Range Filter)", timeRange]);
     metaSheet.addRow(["狀態篩選 (Status Filter)", statusParam]);

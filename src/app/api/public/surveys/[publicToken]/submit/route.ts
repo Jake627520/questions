@@ -13,6 +13,7 @@ import {
   extractClientIp,
   calculatePayloadHash,
 } from "@/lib/submission-integrity";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(
   req: NextRequest,
@@ -24,6 +25,13 @@ export async function POST(
 
   try {
     const { publicToken } = params;
+
+    const limited = await enforceRateLimit({
+      key: `submit:${publicToken}:${extractClientIp(req)}`,
+      ...RATE_LIMITS.publicSubmit,
+    });
+    if (limited) return limited;
+
     const body = await req.json();
     const { responseId, answers } = body;
 
