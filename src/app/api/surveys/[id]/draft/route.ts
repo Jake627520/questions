@@ -2,12 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ResponseStatus } from "@prisma/client";
 import { AnswerSubmission } from "@/lib/types";
+import {
+  getCurrentUser,
+  unauthorizedResponse,
+  isUserInOrganization,
+  forbiddenResponse,
+} from "@/lib/auth";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    // 登入成員的預覽/編輯草稿路徑；匿名填答走 /api/public/surveys/[publicToken]/draft。
+    const auth = await getCurrentUser(req);
+    if (!auth) {
+      return unauthorizedResponse();
+    }
+
     const { id } = params;
     const body = await req.json();
     const responseId = body.responseId as string | undefined;
@@ -28,8 +40,27 @@ export async function POST(
       return NextResponse.json({ error: "找不到該問卷" }, { status: 404 });
     }
 
+    const isMember = await isUserInOrganization(auth.user.id, survey.organizationId);
+    if (!isMember) {
+      return forbiddenResponse("您無權對此組織的問卷進行填答操作");
+    }
+
     if (survey.status === "CLOSED") {
       return NextResponse.json({ error: "此問卷已結束作答" }, { status: 400 });
+    }
+
+    // responseId 必須屬於本問卷，防止竄改其他問卷/租戶的回覆
+    if (responseId) {
+      const existing = await db.response.findUnique({
+        where: { id: responseId },
+        select: { surveyId: true },
+      });
+      if (!existing || existing.surveyId !== survey.id) {
+        return NextResponse.json(
+          { error: "找不到對應此問卷的作答紀錄" },
+          { status: 404 }
+        );
+      }
     }
 
     // 建立或更新草稿（ResponseStatus.IN_PROGRESS）
@@ -104,7 +135,7 @@ export async function POST(
   } catch (error: any) {
     console.error("Error saving survey draft:", error);
     return NextResponse.json(
-      { error: "暫存草稿失敗", details: error.message },
+      { error: "暫存草稿失敗" },
       { status: 500 }
     );
   }

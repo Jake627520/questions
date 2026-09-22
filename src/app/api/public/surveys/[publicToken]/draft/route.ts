@@ -115,7 +115,7 @@ export async function POST(
   } catch (error: any) {
     console.error("[Public Survey Draft Error]:", error);
     return NextResponse.json(
-      { error: "草稿儲存失敗", details: error.message },
+      { error: "草稿儲存失敗" },
       { status: 500 }
     );
   }

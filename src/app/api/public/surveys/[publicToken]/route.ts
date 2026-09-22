@@ -126,7 +126,7 @@ export async function GET(
   } catch (error: any) {
     console.error("[Public Survey API Error]:", error);
     return NextResponse.json(
-      { error: "讀取公開問卷失敗", details: error.message },
+      { error: "讀取公開問卷失敗" },
       { status: 500 }
     );
   }

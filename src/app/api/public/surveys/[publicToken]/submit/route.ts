@@ -446,7 +446,7 @@ export async function POST(
 
     console.error("[Public Survey Submit Error]:", error);
     return NextResponse.json(
-      { error: "問卷提交失敗，請稍後再試", details: error.message },
+      { error: "問卷提交失敗，請稍後再試" },
       { status: 500 }
     );
   }
