@@ -4,7 +4,7 @@ import { validateQuestionsStructure } from "@/lib/survey-engine";
 import { db } from "@/lib/db";
 import { ImportStatus, QuestionType, SurveyStatus } from "@prisma/client";
 import { ImportResponse, ValidationIssue } from "@/types/surveyImport";
-import { getCurrentUser, isUserInOrganization, forbiddenResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
+import { getCurrentUser, isUserInOrganization, forbiddenResponse, unauthorizedResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { extractClientIp } from "@/lib/submission-integrity";
 
@@ -117,20 +117,32 @@ export async function POST(req: NextRequest) {
     let organizationId = requestedOrgId || defaultOrg.id;
 
     const auth = await getCurrentUser(req);
-
     const limited = await enforceRateLimit({
       key: `import:${auth?.user.id ?? extractClientIp(req)}`,
       ...RATE_LIMITS.import,
     });
     if (limited) return limited;
 
-    if (auth && mode === "save") {
+    if (mode === "save") {
+      if (!auth) {
+        return unauthorizedResponse("未授權存取，請先登入系統才能進行問卷匯入操作");
+      }
       const { allowed, membership } = await hasRole(auth.user.id, organizationId, ROLES.EDITORS);
       if (!membership) {
         return forbiddenResponse("您非該組織成員，無權匯入問卷至該組織");
       }
       if (!allowed) {
         return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能匯入問卷");
+      }
+    } else {
+      if (!auth) {
+        return unauthorizedResponse("未授權存取，請先登入系統才能進行問卷預覽操作");
+      }
+      if (requestedOrgId && requestedOrgId !== defaultOrg.id) {
+        const isMember = await isUserInOrganization(auth.user.id, organizationId);
+        if (!isMember) {
+          return forbiddenResponse("您非該組織成員，無權在此組織預覽問卷");
+        }
       }
     }
 
@@ -416,6 +428,14 @@ export async function POST(req: NextRequest) {
       if (parent) {
         version = parent.version + 1;
         organizationId = parent.organizationId;
+
+        const { allowed, membership } = await hasRole(auth!.user.id, organizationId, ROLES.EDITORS);
+        if (!membership) {
+          return forbiddenResponse("您非該問卷所屬組織成員，無權建立新版本");
+        }
+        if (!allowed) {
+          return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能在此組織建立新版本");
+        }
       }
     }
 

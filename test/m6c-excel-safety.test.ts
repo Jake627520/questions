@@ -13,13 +13,50 @@ import {
 import { validateSurveyExcel } from "../src/lib/validateSurveyExcel";
 import { POST } from "../src/app/api/surveys/import/route";
 import { NextRequest } from "next/server";
+import { createSession, SESSION_COOKIE_NAME, hashPassword } from "../src/lib/auth";
+import { Role } from "@prisma/client";
 
 describe("Phase M6C: Excel Import UX, Safety & Atomic Transaction 驗證測試", () => {
+  let m6cToken: string;
+
   beforeEach(async () => {
     // 清理測試資料
     await db.survey.deleteMany({
       where: { title: { startsWith: "[M6C-TEST]" } },
     });
+
+    // 確保預設組織與測試使用者
+    await db.organization.upsert({
+      where: { id: "default-org-id" },
+      update: {},
+      create: { id: "default-org-id", name: "Default Workspace", slug: "default" },
+    });
+
+    const user = await db.user.upsert({
+      where: { email: "m6c-editor@example.com" },
+      update: {},
+      create: {
+        id: "m6c-editor-user",
+        email: "m6c-editor@example.com",
+        name: "M6C Editor",
+        passwordHash: await hashPassword("Pass123!"),
+        memberships: {
+          create: { organizationId: "default-org-id", role: Role.EDITOR },
+        },
+      },
+    });
+
+    // 確保 membership
+    await db.membership.upsert({
+      where: {
+        userId_organizationId: { userId: user.id, organizationId: "default-org-id" },
+      },
+      update: { role: Role.EDITOR },
+      create: { userId: user.id, organizationId: "default-org-id", role: Role.EDITOR },
+    });
+
+    const s = await createSession(user.id);
+    m6cToken = s.token;
   });
 
   // =========================================================================
@@ -150,6 +187,7 @@ describe("Phase M6C: Excel Import UX, Safety & Atomic Transaction 驗證測試",
 
       const req = new NextRequest("http://localhost:3000/api/surveys/import", {
         method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${m6cToken}` },
         body: formData,
       });
 
@@ -190,6 +228,7 @@ describe("Phase M6C: Excel Import UX, Safety & Atomic Transaction 驗證測試",
 
       const req = new NextRequest("http://localhost:3000/api/surveys/import", {
         method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${m6cToken}` },
         body: formData,
       });
 
@@ -246,6 +285,7 @@ describe("Phase M6C: Excel Import UX, Safety & Atomic Transaction 驗證測試",
 
       const req = new NextRequest("http://localhost:3000/api/surveys/import", {
         method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${m6cToken}` },
         body: formData,
       });
 
@@ -281,6 +321,7 @@ describe("Phase M6C: Excel Import UX, Safety & Atomic Transaction 驗證測試",
 
       const req = new NextRequest("http://localhost:3000/api/surveys/import", {
         method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${m6cToken}` },
         body: formData,
       });
 

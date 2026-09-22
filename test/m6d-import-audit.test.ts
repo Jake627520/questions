@@ -6,10 +6,13 @@ import { GET as historyGET } from "../src/app/api/surveys/import/history/route";
 import { GET as detailGET } from "../src/app/api/surveys/import/[importId]/route";
 import { GET as errorCsvGET } from "../src/app/api/surveys/import/[importId]/errors/route";
 import { NextRequest } from "next/server";
+import { createSession, SESSION_COOKIE_NAME, hashPassword } from "../src/lib/auth";
+import { Role } from "@prisma/client";
 
 describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
   const orgAId = "test-org-m6d-a";
   const orgBId = "test-org-m6d-b";
+  let tokenA: string;
 
   beforeEach(async () => {
     // 清理舊測試資料
@@ -35,6 +38,29 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
       update: {},
       create: { id: orgBId, name: "Org B", slug: "org-b" },
     });
+
+    const userA = await db.user.upsert({
+      where: { email: "m6d-admin-a@example.com" },
+      update: {},
+      create: {
+        id: "m6d-admin-a",
+        email: "m6d-admin-a@example.com",
+        name: "M6D Admin A",
+        passwordHash: await hashPassword("Pass123!"),
+        memberships: {
+          create: { organizationId: orgAId, role: Role.ADMIN },
+        },
+      },
+    });
+    await db.membership.upsert({
+      where: {
+        userId_organizationId: { userId: userA.id, organizationId: orgAId },
+      },
+      update: { role: Role.ADMIN },
+      create: { userId: userA.id, organizationId: orgAId, role: Role.ADMIN },
+    });
+    const sA = await createSession(userA.id);
+    tokenA = sA.token;
   });
 
   // =========================================================================
@@ -68,6 +94,7 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
 
       const req = new NextRequest("http://localhost:3000/api/surveys/import", {
         method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
         body: formData,
       });
 
@@ -126,6 +153,7 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
 
       const req = new NextRequest("http://localhost:3000/api/surveys/import", {
         method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
         body: formData,
       });
 
@@ -168,6 +196,7 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
 
       const req = new NextRequest("http://localhost:3000/api/surveys/import", {
         method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
         body: formData,
       });
 
@@ -254,7 +283,9 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
     });
 
     it("查詢 Org A 的歷史紀錄應僅回傳 Org A 的 2 筆紀錄，不得洩漏 Org B 資料", async () => {
-      const req = new NextRequest(`http://localhost:3000/api/surveys/import/history?organizationId=${orgAId}`);
+      const req = new NextRequest(`http://localhost:3000/api/surveys/import/history?organizationId=${orgAId}`, {
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
+      });
       const res = await historyGET(req);
       const data = await res.json();
 
@@ -267,7 +298,10 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
 
     it("支援 status 篩選（只看 SUCCESS）與分頁計算", async () => {
       const req = new NextRequest(
-        `http://localhost:3000/api/surveys/import/history?organizationId=${orgAId}&status=SUCCESS&page=1&pageSize=10`
+        `http://localhost:3000/api/surveys/import/history?organizationId=${orgAId}&status=SUCCESS&page=1&pageSize=10`,
+        {
+          headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
+        }
       );
       const res = await historyGET(req);
       const data = await res.json();
@@ -296,7 +330,9 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
         },
       });
 
-      const req = new NextRequest("http://localhost:3000/api/surveys/import/IMP-DETAIL-TEST");
+      const req = new NextRequest("http://localhost:3000/api/surveys/import/IMP-DETAIL-TEST", {
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
+      });
       const res = await detailGET(req, { params: { importId: "IMP-DETAIL-TEST" } });
       const data = await res.json();
 
@@ -331,7 +367,9 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
         },
       });
 
-      const req = new NextRequest("http://localhost:3000/api/surveys/import/IMP-CSV-ERR-TEST/errors");
+      const req = new NextRequest("http://localhost:3000/api/surveys/import/IMP-CSV-ERR-TEST/errors", {
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
+      });
       const res = await errorCsvGET(req, { params: { importId: "IMP-CSV-ERR-TEST" } });
       const csvText = await res.text();
 
