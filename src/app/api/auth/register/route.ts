@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { hashPassword, createSession, getSessionCookieOptions } from "@/lib/auth";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { extractClientIp } from "@/lib/submission-integrity";
+import { parseBody, RegisterSchema } from "@/lib/validate";
 import { Role } from "@prisma/client";
 
 export async function POST(req: NextRequest) {
@@ -16,16 +17,9 @@ export async function POST(req: NextRequest) {
     });
     if (limited) return limited;
 
-    const body = await req.json();
-    const { name, email, password, confirmPassword } = body;
-
-    // 1. 基本欄位存在性檢查
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: "VALIDATION_ERROR", message: "電子郵件與密碼為必填項目" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseBody(req, RegisterSchema);
+    if (!parsed.ok) return parsed.response;
+    const { name, email, password, confirmPassword } = parsed.data;
 
     const trimmedEmail = email.toLowerCase().trim();
 

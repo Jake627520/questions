@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, unauthorizedResponse, verifyPassword, hashPassword } from "@/lib/auth";
+import { parseBody, ChangePasswordSchema } from "@/lib/validate";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,16 +12,9 @@ export async function POST(req: NextRequest) {
       return unauthorizedResponse();
     }
 
-    const body = await req.json();
-    const { currentPassword, newPassword, confirmNewPassword } = body;
-
-    // 1. 必填驗證
-    if (!currentPassword || !newPassword) {
-      return NextResponse.json(
-        { error: "VALIDATION_ERROR", message: "請輸入目前密碼與新密碼" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseBody(req, ChangePasswordSchema);
+    if (!parsed.ok) return parsed.response;
+    const { currentPassword, newPassword, confirmNewPassword } = parsed.data;
 
     // 2. 新密碼確認驗證
     if (confirmNewPassword !== undefined && newPassword !== confirmNewPassword) {

@@ -135,14 +135,27 @@ export function calculateFillingDuration(
 }
 
 /**
- * 從請求中解析 Client IP
+ * 從請求解析「可信的」Client IP。
+ *
+ * x-forwarded-for 由各層代理由左至右附加，**最左段是 client 自稱、可被偽造**。
+ * 若直接採信最左段，攻擊者可輪換偽造 IP 繞過以 IP 為 key 的限流與 IP 稽核。
+ * 因此改採「從右數第 N 跳」：N = 伺服器前方可信代理層數
+ * (TRUSTED_PROXY_HOPS，預設 1，對應 Vercel / 單層反向代理)，取到的是最靠近
+ * 伺服器的可信代理所實際觀察到的來源 IP，client 無法偽造。
+ * 若部署在多層可信代理後方，將該環境變數設為實際層數。
  */
 export function extractClientIp(req: Request): string {
+  const hops = Math.max(1, parseInt(process.env.TRUSTED_PROXY_HOPS || "1", 10) || 1);
+
   const xForwardedFor = req.headers.get("x-forwarded-for");
   if (xForwardedFor) {
-    const parts = xForwardedFor.split(",");
-    if (parts.length > 0 && parts[0].trim()) {
-      return parts[0].trim();
+    const parts = xForwardedFor
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length > 0) {
+      const ip = parts[Math.max(0, parts.length - hops)];
+      if (ip) return ip;
     }
   }
 

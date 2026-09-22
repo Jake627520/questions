@@ -6,6 +6,7 @@ import {
   hashPasswordResetToken,
   hashPassword,
 } from "@/lib/auth";
+import { parseBody, ResetPasswordSchema } from "@/lib/validate";
 
 /**
  * GET /api/auth/reset-password
@@ -55,23 +56,9 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const { token, password, confirmPassword } = body;
-
-    // 1. 必填校驗
-    if (!token || typeof token !== "string") {
-      return NextResponse.json(
-        { error: "VALIDATION_ERROR", message: "請提供有效的重設密碼 Token" },
-        { status: 400 }
-      );
-    }
-
-    if (!password || typeof password !== "string") {
-      return NextResponse.json(
-        { error: "VALIDATION_ERROR", message: "請輸入新密碼" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseBody(req, ResetPasswordSchema);
+    if (!parsed.ok) return parsed.response;
+    const { token, password, confirmPassword } = parsed.data;
 
     // 2. 密碼長度驗證 (至少 8 碼)
     if (password.length < 8) {
