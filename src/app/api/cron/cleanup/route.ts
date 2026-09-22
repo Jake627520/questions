@@ -6,20 +6,27 @@ import { cleanupExpiredExports } from "@/lib/report-governance";
 
 async function handleCleanup(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
+
+  // Fail-closed：未設定 CRON_SECRET 時，此端點一律拒絕執行——否則任何人都能
+  // 觸發治理清理 (刪 session / token、標記過期匯出)。之前是「有設才驗、沒設就全開」。
+  if (!cronSecret) {
+    console.error("[Cron Cleanup] CRON_SECRET 未設定，拒絕執行以防未授權觸發。");
+    return NextResponse.json(
+      { error: "CRON_NOT_CONFIGURED", message: "排程清理未啟用 (伺服器缺少 CRON_SECRET 設定)" },
+      { status: 503 }
+    );
+  }
+
   const authHeader = req.headers.get("authorization");
   const xCronHeader = req.headers.get("x-cron-secret");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+  const isAuthorized = bearerToken === cronSecret || xCronHeader === cronSecret;
 
-  // 驗證 Secret (若系統有設定 CRON_SECRET)
-  if (cronSecret) {
-    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
-    const isAuthorized = bearerToken === cronSecret || xCronHeader === cronSecret;
-
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { error: "UNAUTHORIZED", message: "無效或未提供 Cron 授權密鑰" },
-        { status: 401 }
-      );
-    }
+  if (!isAuthorized) {
+    return NextResponse.json(
+      { error: "UNAUTHORIZED", message: "無效或未提供 Cron 授權密鑰" },
+      { status: 401 }
+    );
   }
 
   const now = new Date();
