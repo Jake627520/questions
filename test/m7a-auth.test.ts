@@ -325,7 +325,9 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
       expect(data.survey.id).toBe(testSurveyId);
     });
 
-    it("公開填答提交 POST /api/surveys/:id/submit 應允許未登入填答者送出 (200 OK)", async () => {
+    // 資安模型調整：[id]/submit 與 [id]/draft 改為登入成員限定 (owner 預覽/編輯回覆)。
+    // 匿名填答一律走已完整防護的 /api/public/surveys/[publicToken]/submit。
+    it("未登入呼叫 POST /api/surveys/:id/submit 應被拒絕 (401 Unauthorized)", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${testSurveyId}/submit`, {
         method: "POST",
         body: JSON.stringify({
@@ -333,13 +335,10 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
         }),
       });
       const res = await submitPOST(req, { params: { id: testSurveyId } });
-      expect(res.status).toBe(200);
-      const data = await res.json();
-      expect(data.success).toBe(true);
-      expect(data.responseId).toBeDefined();
+      expect(res.status).toBe(401);
     });
 
-    it("公開暫存作答 POST /api/surveys/:id/draft 應允許未登入填答者暫存 (200 OK)", async () => {
+    it("未登入呼叫 POST /api/surveys/:id/draft 應被拒絕 (401 Unauthorized)", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${testSurveyId}/draft`, {
         method: "POST",
         body: JSON.stringify({
@@ -347,9 +346,7 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
         }),
       });
       const res = await draftPOST(req, { params: { id: testSurveyId } });
-      expect(res.status).toBe(200);
-      const data = await res.json();
-      expect(data.success).toBe(true);
+      expect(res.status).toBe(401);
     });
 
     it("示範範本下載 GET /api/template 應允許未登入存取 (200 OK)", async () => {

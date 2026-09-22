@@ -75,7 +75,7 @@ export async function GET(
   } catch (error: any) {
     console.error("[Public Survey Draft Get Error]:", error);
     return NextResponse.json(
-      { error: "讀取草稿失敗", details: error.message },
+      { error: "讀取草稿失敗" },
       { status: 500 }
     );
   }
