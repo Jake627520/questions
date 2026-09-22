@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser, isUserInOrganization, forbiddenResponse } from "@/lib/auth";
+import { getCurrentUser, isUserInOrganization, forbiddenResponse, unauthorizedResponse } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
@@ -38,11 +38,13 @@ export async function GET(
     }
 
     const auth = await getCurrentUser(req);
-    if (auth) {
-      const isMember = await isUserInOrganization(auth.user.id, record.organizationId);
-      if (!isMember) {
-        return forbiddenResponse("您無權查看此組織的匯入紀錄");
-      }
+    if (!auth) {
+      return unauthorizedResponse("未授權存取，請先登入系統查看匯入紀錄詳情");
+    }
+
+    const isMember = await isUserInOrganization(auth.user.id, record.organizationId);
+    if (!isMember) {
+      return forbiddenResponse("您無權查看此組織的匯入紀錄");
     }
 
     return NextResponse.json({

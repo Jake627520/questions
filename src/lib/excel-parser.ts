@@ -90,7 +90,78 @@ export function parseStrictOrderNum(
   return num;
 }
 
-function parseNumber(val: any): number | null {
+export function parseStrictNumber(
+  val: any,
+  fieldName: string,
+  rowNum: number,
+  sheet: "questions" | "choices" | "system",
+  issues: ValidationIssue[],
+  errors: string[],
+  options?: { integerOnly?: boolean; min?: number; max?: number }
+): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "string" && val.trim() === "") return null;
+
+  const num = typeof val === "number" ? val : Number(String(val).trim());
+  if (isNaN(num) || !isFinite(num) || (options?.integerOnly && !Number.isInteger(num))) {
+    const strVal = String(val).slice(0, 50);
+    const typeLabel = options?.integerOnly ? "整數" : "數值";
+    const msg = `${sheet} 工作表第 ${rowNum} 列「${fieldName}」欄位的值「${strVal}」不是合法的${typeLabel}`;
+    errors.push(msg);
+    issues.push({
+      code: "INVALID_NUMBER",
+      severity: "error",
+      sheet,
+      row: rowNum,
+      column: fieldName,
+      field: fieldName,
+      value: strVal,
+      message: msg,
+      suggestion: options?.integerOnly ? "請填寫合法的整數或保留空白。" : "請填寫合法的數值或保留空白。",
+    });
+    return null;
+  }
+
+  if (options?.min !== undefined && num < options.min) {
+    const strVal = String(val).slice(0, 50);
+    const msg = `${sheet} 工作表第 ${rowNum} 列「${fieldName}」欄位的值「${strVal}」不能小於 ${options.min}`;
+    errors.push(msg);
+    issues.push({
+      code: "INVALID_NUMBER",
+      severity: "error",
+      sheet,
+      row: rowNum,
+      column: fieldName,
+      field: fieldName,
+      value: strVal,
+      message: msg,
+      suggestion: `請填寫大於或等於 ${options.min} 的數值。`,
+    });
+    return null;
+  }
+
+  if (options?.max !== undefined && num > options.max) {
+    const strVal = String(val).slice(0, 50);
+    const msg = `${sheet} 工作表第 ${rowNum} 列「${fieldName}」欄位的值「${strVal}」不能大於 ${options.max}`;
+    errors.push(msg);
+    issues.push({
+      code: "INVALID_NUMBER",
+      severity: "error",
+      sheet,
+      row: rowNum,
+      column: fieldName,
+      field: fieldName,
+      value: strVal,
+      message: msg,
+      suggestion: `請填寫小於或等於 ${options.max} 的數值。`,
+    });
+    return null;
+  }
+
+  return num;
+}
+
+export function parseNumber(val: any): number | null {
   if (val === null || val === undefined || val === "") return null;
   const num = Number(val);
   return isNaN(num) ? null : num;
@@ -314,6 +385,23 @@ export async function parseSurveyExcel(
       });
       return;
     }
+
+    if (!/^[A-Za-z0-9_]+$/.test(code)) {
+      const msg = `第 ${rowNumber} 列 [${code}]：題目代碼（code）格式不符規範（僅允許英數字與底線，不得包含空格或特殊符號）`;
+      errors.push(msg);
+      issues.push({
+        code: "INVALID_VALUE",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "code",
+        field: "code",
+        value: code,
+        message: msg,
+        suggestion: "請修改代碼為英數字與底線組合，例如 Q1、Q2_FEEDBACK。",
+      });
+      return;
+    }
     if (!title) {
       const msg = `第 ${rowNumber} 列 [${code}]：題目內容（title）為空`;
       errors.push(msg);
@@ -388,7 +476,24 @@ export async function parseSurveyExcel(
       return;
     }
 
-    const rawType = String(getVal("question_type") || "single_choice").trim();
+    const rawVal = getVal("question_type");
+    if (rawVal === null || rawVal === undefined || String(rawVal).trim() === "") {
+      const msg = `第 ${rowNumber} 列 [${code}]：題型（question_type）為空`;
+      errors.push(msg);
+      issues.push({
+        code: "REQUIRED_FIELD_EMPTY",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "question_type",
+        field: "question_type",
+        message: msg,
+        suggestion: "請在 question_type 欄位填寫支援的 6 種題型之一：single_choice, multiple_choice, text, number, yes_no, info。",
+      });
+      return;
+    }
+
+    const rawType = String(rawVal).trim();
 
     const typeParse = QuestionTypeEnum.safeParse(rawType);
     if (!typeParse.success) {
@@ -420,10 +525,60 @@ export async function parseSurveyExcel(
     const visibilityHint = getVal("visibility_hint")
       ? String(getVal("visibility_hint")).trim()
       : null;
-    const minSelections = parseNumber(getVal("min_selections"));
-    const maxSelections = parseNumber(getVal("max_selections"));
-    const minValue = parseNumber(getVal("min_value"));
-    const maxValue = parseNumber(getVal("max_value"));
+    const minSelections = parseStrictNumber(getVal("min_selections"), "min_selections", rowNumber, "questions", issues, errors, { integerOnly: true, min: 0 });
+    const maxSelections = parseStrictNumber(getVal("max_selections"), "max_selections", rowNumber, "questions", issues, errors, { integerOnly: true, min: 0 });
+    const minValue = parseStrictNumber(getVal("min_value"), "min_value", rowNumber, "questions", issues, errors);
+    const maxValue = parseStrictNumber(getVal("max_value"), "max_value", rowNumber, "questions", issues, errors);
+
+    if (questionsMap.has(code)) {
+      const existing = questionsMap.get(code)!;
+      const msg = `questions 工作表第 ${rowNumber} 列：題目代碼「${code}」與第 ${existing.rowNum} 列重複`;
+      errors.push(msg);
+      issues.push({
+        code: "DUPLICATE_QUESTION_CODE",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "code",
+        field: "code",
+        value: code,
+        message: msg,
+        suggestion: "問卷中每個題目的代碼（code）必須唯一，請修改代碼。",
+      });
+      return;
+    }
+
+    if (minSelections !== null && maxSelections !== null && minSelections > maxSelections) {
+      const msg = `questions 工作表第 ${rowNumber} 列 [${code}]：最小選取數 (${minSelections}) 不得大於最大選取數 (${maxSelections})`;
+      errors.push(msg);
+      issues.push({
+        code: "INVALID_MIN_MAX_RANGE",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "min_selections",
+        field: "min_selections",
+        value: `${minSelections} > ${maxSelections}`,
+        message: msg,
+        suggestion: "請確保 min_selections 小於或等於 max_selections。",
+      });
+    }
+
+    if (minValue !== null && maxValue !== null && minValue > maxValue) {
+      const msg = `questions 工作表第 ${rowNumber} 列 [${code}]：最小值 (${minValue}) 不得大於最大值 (${maxValue})`;
+      errors.push(msg);
+      issues.push({
+        code: "INVALID_MIN_MAX_RANGE",
+        severity: "error",
+        sheet: "questions",
+        row: rowNumber,
+        column: "min_value",
+        field: "min_value",
+        value: `${minValue} > ${maxValue}`,
+        message: msg,
+        suggestion: "請確保 min_value 小於或等於 max_value。",
+      });
+    }
 
     questionsMap.set(code, {
       rowNum: rowNumber,
@@ -518,6 +673,23 @@ export async function parseSurveyExcel(
         return;
       }
 
+      if (!/^[A-Za-z0-9_]+$/.test(value)) {
+        const msg = `choices 工作表第 ${rowNumber} 列 [${qCode}]：選項代碼 (value)「${value}」格式不符規範（僅允許英數字與底線，不得包含空格或特殊符號）`;
+        errors.push(msg);
+        issues.push({
+          code: "INVALID_VALUE",
+          severity: "error",
+          sheet: "choices",
+          row: rowNumber,
+          column: "value",
+          field: "value",
+          value,
+          message: msg,
+          suggestion: "請修改選項代碼為英數字與底線組合，例如 1、OPT_A、agree_1。",
+        });
+        return;
+      }
+
       if (label.length > MAX_CELL_LENGTH) {
         const msg = `choices 工作表第 ${rowNumber} 列 [${qCode}]：選項標題過長（最多 ${MAX_CELL_LENGTH} 字元）`;
         errors.push(msg);
@@ -561,7 +733,7 @@ export async function parseSurveyExcel(
         }
       }
       const scoreEnabled = parseStrictBoolean(getVal("score_enabled"), "score_enabled", rowNumber, "choices", issues, errors);
-      const score = parseNumber(getVal("score"));
+      const score = parseStrictNumber(getVal("score"), "score", rowNumber, "choices", issues, errors);
       const isOther = parseStrictBoolean(getVal("is_other"), "is_other", rowNumber, "choices", issues, errors);
       const requiresText = parseStrictBoolean(getVal("requires_text"), "requires_text", rowNumber, "choices", issues, errors);
       const isNoneOfAbove = parseStrictBoolean(getVal("is_none_of_above"), "is_none_of_above", rowNumber, "choices", issues, errors);
@@ -583,6 +755,22 @@ export async function parseSurveyExcel(
   const questionsList = Array.from(questionsMap.values()).sort((a, b) => a.orderNum - b.orderNum);
   questionsList.forEach((q) => {
     q.choices.sort((a, b) => a.orderNum - b.orderNum);
+
+    if ((q.questionType === "single_choice" || q.questionType === "multiple_choice") && (!q.choices || q.choices.length === 0)) {
+      const msg = `questions 工作表第 ${q.rowNum} 列 [${q.code}]：題型為「${q.questionType}」的題目必須包含至少一個選項`;
+      errors.push(msg);
+      issues.push({
+        code: "CHOICE_REQUIRED_FOR_TYPE",
+        severity: "error",
+        sheet: "questions",
+        row: q.rowNum,
+        column: "question_type",
+        field: "question_type",
+        value: q.questionType,
+        message: msg,
+        suggestion: "請在 choices 工作表中為此選擇題提供至少一個選項。",
+      });
+    }
   });
 
   return {

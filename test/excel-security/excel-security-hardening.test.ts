@@ -6,6 +6,8 @@ import { validateQuestionsStructure, detectCircularDependencies } from "@/lib/su
 import { POST as importPOST } from "@/app/api/surveys/import/route";
 import { db } from "@/lib/db";
 import { ValidationIssue } from "@/types/surveyImport";
+import { createSession, SESSION_COOKIE_NAME, hashPassword } from "@/lib/auth";
+import { Role } from "@prisma/client";
 
 /**
  * 建立標準合法的 2-Sheet Excel 活頁簿 Buffer Helper
@@ -476,6 +478,41 @@ describe("Phase M9-E.0: Excel Import Security & Data Integrity Hardening", () =>
   // 6. Import Publish Boundary & Status Enforcement (P0 Safety)
   // =========================================================================
   describe("6. Import Publish Boundary & Status Enforcement (P0 Safety)", () => {
+    let editorToken: string;
+
+    beforeEach(async () => {
+      await db.organization.upsert({
+        where: { id: "default-org-id" },
+        update: {},
+        create: { id: "default-org-id", name: "Default Workspace", slug: "default" },
+      });
+
+      const user = await db.user.upsert({
+        where: { email: "hardening-editor@example.com" },
+        update: {},
+        create: {
+          id: "hardening-editor-user",
+          email: "hardening-editor@example.com",
+          name: "Hardening Editor",
+          passwordHash: await hashPassword("Pass123!"),
+          memberships: {
+            create: { organizationId: "default-org-id", role: Role.EDITOR },
+          },
+        },
+      });
+
+      await db.membership.upsert({
+        where: {
+          userId_organizationId: { userId: user.id, organizationId: "default-org-id" },
+        },
+        update: { role: Role.EDITOR },
+        create: { userId: user.id, organizationId: "default-org-id", role: Role.EDITOR },
+      });
+
+      const s = await createSession(user.id);
+      editorToken = s.token;
+    });
+
     it("POST /api/surveys/import: 若 client 傳遞 status=PUBLISHED，應被伺服端拒絕 (400 IMPORT_CANNOT_PUBLISH)", async () => {
       const buffer = await createWorkbookBuffer();
       const blob = new Blob([new Uint8Array(buffer)], {
@@ -490,6 +527,7 @@ describe("Phase M9-E.0: Excel Import Security & Data Integrity Hardening", () =>
 
       const req = new NextRequest("http://localhost:3000/api/surveys/import", {
         method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${editorToken}` },
         body: formData,
       });
 
@@ -514,6 +552,7 @@ describe("Phase M9-E.0: Excel Import Security & Data Integrity Hardening", () =>
 
       const req = new NextRequest("http://localhost:3000/api/surveys/import", {
         method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${editorToken}` },
         body: formData,
       });
 

@@ -17,29 +17,28 @@ export async function GET(req: NextRequest) {
 
     let organizationScope: any;
 
-    if (auth) {
-      const userOrgIds = await getUserOrganizationIds(auth.user.id);
-      if (requestedOrgId) {
-        if (!userOrgIds.includes(requestedOrgId)) {
-          return forbiddenResponse("您無權存取該組織的匯入歷史紀錄");
-        }
-        organizationScope = requestedOrgId;
-      } else {
-        if (userOrgIds.length === 0) {
-          return NextResponse.json({
-            success: true,
-            items: [],
-            page,
-            pageSize,
-            total: 0,
-            totalPages: 1,
-          } satisfies ImportHistoryResponse);
-        }
-        organizationScope = { in: userOrgIds };
+    if (!auth) {
+      return unauthorizedResponse("未授權存取，請先登入系統查看匯入歷史紀錄");
+    }
+
+    const userOrgIds = await getUserOrganizationIds(auth.user.id);
+    if (requestedOrgId) {
+      if (!userOrgIds.includes(requestedOrgId)) {
+        return forbiddenResponse("您無權存取該組織的匯入歷史紀錄");
       }
+      organizationScope = requestedOrgId;
     } else {
-      // 若未提供 auth（相容未附 session 之測試與 legacy 調用）
-      organizationScope = requestedOrgId || "default-org-id";
+      if (userOrgIds.length === 0) {
+        return NextResponse.json({
+          success: true,
+          items: [],
+          page,
+          pageSize,
+          total: 0,
+          totalPages: 1,
+        } satisfies ImportHistoryResponse);
+      }
+      organizationScope = { in: userOrgIds };
     }
 
     const where: any = {
