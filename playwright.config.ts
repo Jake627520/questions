@@ -42,5 +42,10 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
+    // E2E 伺服器停用 route 層限流：golden paths 全部從同一個 IP 連打
+    // (登入多角色 + retry)，會誤觸每 IP 限流。生產環境不受影響，限流邏輯
+    // 由 vitest 的 rate-limit-persistent 測試覆蓋。與 vitest.config 的
+    // RATE_LIMIT_DISABLED=1 一致。
+    env: { ...process.env, RATE_LIMIT_DISABLED: "1" } as Record<string, string>,
   },
 });
