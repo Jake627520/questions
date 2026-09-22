@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { verifyPassword, createSession, getSessionCookieOptions } from "@/lib/auth";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { extractClientIp } from "@/lib/submission-integrity";
+import { parseBody, LoginSchema } from "@/lib/validate";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,15 +16,9 @@ export async function POST(req: NextRequest) {
     });
     if (limited) return limited;
 
-    const body = await req.json();
-    const { email, password } = body;
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: "INVALID_CREDENTIALS", message: "請輸入電子郵件與密碼" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseBody(req, LoginSchema);
+    if (!parsed.ok) return parsed.response;
+    const { email, password } = parsed.data;
 
     const user = await db.user.findUnique({
       where: { email: email.toLowerCase().trim() },
