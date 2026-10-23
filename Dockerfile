@@ -1,12 +1,12 @@
 # 1. Base stage
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
 
 # 2. Dependencies stage
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 # 3. Builder stage
 FROM base AS builder
@@ -16,7 +16,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN npx prisma generate
-RUN npm run build
+RUN mkdir -p public && npm run build
 
 # 4. Production Runner stage
 FROM base AS runner
