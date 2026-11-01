@@ -1,13 +1,15 @@
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600;700&display=swap");
 
+@import "../styles/themes.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 46, 62, 92;
-  --background-start-rgb: 245, 244, 240;
-  --background-end-rgb: 236, 229, 213;
+  --foreground-rgb: var(--c-ink-600);
+  --background-start-rgb: var(--c-stone-50);
+  --background-end-rgb: var(--c-page-end);
 }
 
 body {

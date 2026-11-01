@@ -3,6 +3,8 @@ import "./globals.css";
 import Link from "next/link";
 import { FileSpreadsheet, LayoutGrid, Settings, PlusCircle } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import { ThemePicker } from "@/components/ThemePicker";
+import { themeBootScript } from "@/lib/theme";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://questions-survey-system1.vercel.app";
 
@@ -65,7 +67,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-TW">
+    // data-theme 由 head 裡的小腳本在 React 之前設定，伺服器端不知道，所以略過這個屬性的比對警告
+    <html lang="zh-TW" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body className="antialiased text-slate-900 bg-slate-50 flex flex-col min-h-screen">
         <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200 shadow-sm">
           <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
@@ -117,6 +123,7 @@ export default function RootLayout({
 
         <footer className="border-t border-slate-200 bg-white py-6 mt-12 text-center text-sm text-slate-500">
           <p>© 2026 Survey System MVP. Built with Next.js, Prisma, PostgreSQL & ExcelJS.</p>
+          <ThemePicker />
         </footer>
       </body>
     </html>
