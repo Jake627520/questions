@@ -31,7 +31,8 @@ export async function POST(
   let surveyIdForError: string | undefined;
 
   try {
-    const { publicToken } = params;
+    // 限流 key 與問卷查詢使用同一個正規化 token，避免以前後空白開出新的限流桶
+    const publicToken = (params.publicToken ?? "").trim();
 
     const limited = await enforceRateLimit({
       key: `submit:${publicToken}:${extractClientIp(req)}`,
@@ -63,7 +64,7 @@ export async function POST(
 
     currentPayloadHash = calculatePayloadHash(answers || []);
 
-    if (!publicToken || publicToken.trim() === "") {
+    if (!publicToken) {
       return NextResponse.json(
         { error: "INVALID_PUBLIC_TOKEN", message: "請提供有效的問卷 Public Token" },
         { status: 400 }
@@ -71,7 +72,7 @@ export async function POST(
     }
 
     const survey = await db.survey.findUnique({
-      where: { publicToken: publicToken.trim() },
+      where: { publicToken },
       include: {
         questions: {
           orderBy: { orderNum: "asc" },

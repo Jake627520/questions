@@ -326,4 +326,34 @@ describe("Security audit 2026-11 regression", () => {
     });
   });
 
+  // [Medium] 公開 submit 限流 key 未 trim
+  describe("public submit rate limit key is normalized", () => {
+    const ip = "203.0.113.211";
+    let prev: string | undefined;
+    beforeEach(async () => {
+      prev = process.env.RATE_LIMIT_DISABLED;
+      process.env.RATE_LIMIT_DISABLED = "0";
+      await db.rateLimitCounter.deleteMany({ where: { bucketKey: { contains: ip } } });
+    });
+    afterEach(async () => {
+      process.env.RATE_LIMIT_DISABLED = prev;
+      await db.rateLimitCounter.deleteMany({ where: { bucketKey: { contains: ip } } });
+    });
+
+    it("padding the token with whitespace does not open a new bucket", async () => {
+      const send = (token: string) =>
+        publicSubmitPOST(
+          jsonReq(`http://localhost/api/public/surveys/${encodeURIComponent(token)}/submit`, "POST", { answers: [] }, undefined, {
+            "x-forwarded-for": ip,
+          }),
+          { params: { publicToken: token } }
+        );
+      for (let i = 0; i < 10; i++) {
+        await send(survey.publicToken);
+      }
+      const res = await send(`${survey.publicToken} `);
+      expect(res.status).toBe(429);
+    });
+  });
+
 });
