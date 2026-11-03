@@ -1,0 +1,29 @@
+# 秘密：本機環境檔不可進入 build context (Next standalone 會把 .env 複製進映像檔)
+.env
+.env.*
+!.env.example
+*.pem
+
+# 依賴與建置產物 (映像檔內重新安裝/建置)
+node_modules
+.next
+out
+build
+coverage
+*.tsbuildinfo
+
+# 版本控制與本機工具
+.git
+.github
+.vercel
+.DS_Store
+*.log
+
+# 測試產物
+playwright-report
+test-results
+e2e/.auth
+
+# 本機雜物 (履歷、壓縮檔等不屬於映像檔)
+*.zip
+*.docx
