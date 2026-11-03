@@ -7,6 +7,8 @@ import {
   unauthorizedResponse,
   isUserInOrganization,
   forbiddenResponse,
+  hasRole,
+  ROLES,
 } from "@/lib/auth";
 
 export async function POST(
@@ -53,12 +55,26 @@ export async function POST(
     if (responseId) {
       const existing = await db.response.findUnique({
         where: { id: responseId },
-        select: { surveyId: true },
+        select: { surveyId: true, status: true },
       });
       if (!existing || existing.surveyId !== survey.id) {
         return NextResponse.json(
           { error: "找不到對應此問卷的作答紀錄" },
           { status: 404 }
+        );
+      }
+
+      // 續寫既有作答會覆寫他人資料，比照修改作答狀態要求 EDITOR 以上
+      const { allowed } = await hasRole(auth.user.id, survey.organizationId, ROLES.EDITORS);
+      if (!allowed) {
+        return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能續寫既有作答");
+      }
+
+      // 只有未完成的草稿可以續寫；已提交 (COMPLETED) 或已排除 (EXCLUDED) 的作答不可變更
+      if (existing.status !== ResponseStatus.IN_PROGRESS) {
+        return NextResponse.json(
+          { error: "RESPONSE_NOT_EDITABLE", message: "此作答已提交或已排除，不可再暫存" },
+          { status: 409 }
         );
       }
     }
