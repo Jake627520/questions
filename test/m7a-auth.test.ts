@@ -317,12 +317,12 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
   // 5. Public Survey Boundary Exception (Fill, Submit, Draft, Template)
   // =========================================================================
   describe("5. 公開填答例外（Public Survey Endpoints 不受 Management Auth Guard 阻擋）", () => {
-    it("公開填答讀取 GET /api/surveys/:id 應允許未登入存取 (200 OK)", async () => {
+    // 資安模型調整 (2026-11 稽核)：GET /api/surveys/:id 改為登入成員限定，
+    // 匿名填答一律走 /api/public/surveys/[publicToken]。
+    it("未登入讀取 GET /api/surveys/:id 應被拒絕 (401 Unauthorized)", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${testSurveyId}`);
       const res = await surveyGET(req, { params: { id: testSurveyId } });
-      expect(res.status).toBe(200);
-      const data = await res.json();
-      expect(data.survey.id).toBe(testSurveyId);
+      expect(res.status).toBe(401);
     });
 
     // 資安模型調整：[id]/submit 與 [id]/draft 改為登入成員限定 (owner 預覽/編輯回覆)。

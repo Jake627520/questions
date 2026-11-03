@@ -193,4 +193,35 @@ describe("Security audit 2026-11 regression", () => {
     });
   });
 
+  // [Medium] GET /api/surveys/[id] 非 management 模式
+  describe("survey detail GET requires membership and hides internal fields", () => {
+    it("anonymous GET is rejected (401)", async () => {
+      const res = await surveyGET(getReq(`http://localhost/api/surveys/${survey.id}`), { params: { id: survey.id } });
+      expect(res.status).toBe(401);
+    });
+
+    it("non-member GET is rejected (403)", async () => {
+      const res = await surveyGET(getReq(`http://localhost/api/surveys/${survey.id}`, tokens.outsider), {
+        params: { id: survey.id },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it("member fill view omits creator email, publicToken and version tree", async () => {
+      const res = await surveyGET(getReq(`http://localhost/api/surveys/${survey.id}`, tokens.viewer), {
+        params: { id: survey.id },
+      });
+      expect(res.status).toBe(200);
+      const { survey: s } = await res.json();
+      expect(s.id).toBe(survey.id);
+      expect(s.questions).toHaveLength(1);
+      expect(s.questions[0].choices).toEqual([]);
+      expect(s.createdBy).toBeUndefined();
+      expect(s.publicToken).toBeUndefined();
+      expect(s.childVersions).toBeUndefined();
+      expect(s.parentSurvey).toBeUndefined();
+      expect(JSON.stringify(s)).not.toContain(`${emailPrefix}owner@example.com`);
+    });
+  });
+
 });
