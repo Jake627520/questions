@@ -57,7 +57,6 @@ export async function GET(
       {
         success: false,
         error: "無法取得匯入紀錄詳情",
-        details: error?.message,
       },
       { status: 500 }
     );

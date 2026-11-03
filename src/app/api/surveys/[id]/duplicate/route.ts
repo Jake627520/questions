@@ -117,7 +117,7 @@ export async function POST(
   } catch (error: any) {
     console.error("[Survey Duplicate Error]:", error);
     return NextResponse.json(
-      { error: "複製問卷失敗", details: error.message },
+      { error: "複製問卷失敗" },
       { status: 500 }
     );
   }

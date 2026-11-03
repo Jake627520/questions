@@ -103,7 +103,7 @@ export async function POST(
   } catch (error: any) {
     console.error("Error cloning survey version:", error);
     return NextResponse.json(
-      { error: "複製新版本失敗", details: error.message },
+      { error: "複製新版本失敗" },
       { status: 500 }
     );
   }

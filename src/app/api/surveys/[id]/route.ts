@@ -117,7 +117,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Error getting survey:", error);
     return NextResponse.json(
-      { error: "取得問卷失敗", details: error.message },
+      { error: "取得問卷失敗" },
       { status: 500 }
     );
   }
@@ -243,7 +243,7 @@ export async function PATCH(
 
     console.error("Error updating survey:", error);
     return NextResponse.json(
-      { error: "更新問卷失敗", details: error.message },
+      { error: "更新問卷失敗" },
       { status: 500 }
     );
   }
@@ -305,7 +305,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error("Error deleting survey:", error);
     return NextResponse.json(
-      { error: "刪除問卷失敗", details: error.message },
+      { error: "刪除問卷失敗" },
       { status: 500 }
     );
   }

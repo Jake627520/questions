@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error("Error fetching surveys:", error);
     return NextResponse.json(
-      { error: "無法取得問卷列表", details: error.message },
+      { error: "無法取得問卷列表" },
       { status: 500 }
     );
   }

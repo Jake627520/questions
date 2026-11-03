@@ -99,7 +99,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Error listing responses:", error);
     return NextResponse.json(
-      { error: "讀取回覆列表失敗", details: error.message },
+      { error: "讀取回覆列表失敗" },
       { status: 500 }
     );
   }

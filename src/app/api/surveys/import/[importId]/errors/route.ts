@@ -94,7 +94,6 @@ export async function GET(
       {
         success: false,
         error: "無法產出錯誤報告 CSV",
-        details: error?.message,
       },
       { status: 500 }
     );

@@ -134,7 +134,7 @@ export async function POST(
 
     console.error("[Survey Publish Error]:", error);
     return NextResponse.json(
-      { error: "發布問卷失敗", details: error.message },
+      { error: "發布問卷失敗" },
       { status: 500 }
     );
   }

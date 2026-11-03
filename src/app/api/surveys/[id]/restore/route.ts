@@ -110,7 +110,7 @@ export async function POST(
 
     console.error("[Survey Restore Error]:", error);
     return NextResponse.json(
-      { error: "還原問卷失敗", details: error.message },
+      { error: "還原問卷失敗" },
       { status: 500 }
     );
   }

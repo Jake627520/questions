@@ -240,7 +240,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Error exporting survey to Excel:", error);
     return NextResponse.json(
-      { error: "匯出 Excel 失敗", details: error.message },
+      { error: "匯出 Excel 失敗" },
       { status: 500 }
     );
   }

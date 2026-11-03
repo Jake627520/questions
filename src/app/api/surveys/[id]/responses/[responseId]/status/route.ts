@@ -100,7 +100,7 @@ export async function PATCH(
   } catch (error: any) {
     console.error("Error updating response status:", error);
     return NextResponse.json(
-      { error: "修改作答狀態失敗", details: error.message },
+      { error: "修改作答狀態失敗" },
       { status: 500 }
     );
   }

@@ -65,7 +65,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Error getting survey response:", error);
     return NextResponse.json(
-      { error: "讀取作答記錄失敗", details: error.message },
+      { error: "讀取作答記錄失敗" },
       { status: 500 }
     );
   }
@@ -133,7 +133,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error("Error deleting survey response:", error);
     return NextResponse.json(
-      { error: "刪除回覆失敗", details: error.message },
+      { error: "刪除回覆失敗" },
       { status: 500 }
     );
   }

@@ -89,7 +89,7 @@ export async function POST(
 
     console.error("[Survey Archive Error]:", error);
     return NextResponse.json(
-      { error: "歸檔問卷失敗", details: error.message },
+      { error: "歸檔問卷失敗" },
       { status: 500 }
     );
   }
