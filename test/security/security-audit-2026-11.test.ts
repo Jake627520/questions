@@ -356,4 +356,19 @@ describe("Security audit 2026-11 regression", () => {
     });
   });
 
+  // [Medium] import PUBLISHED 分支在認證前寫入
+  describe("import rejects anonymous requests before any audit write", () => {
+    it("anonymous status=PUBLISHED save returns 401 and writes nothing", async () => {
+      const formData = new FormData();
+      formData.append("file", new Blob([new Uint8Array([1, 2, 3])]), "evil.xlsx");
+      formData.append("mode", "save");
+      formData.append("status", "PUBLISHED");
+      formData.append("organizationId", orgId);
+      const res = await importPOST(
+        new NextRequest("http://localhost/api/surveys/import", { method: "POST", body: formData })
+      );
+      expect(res.status).toBe(401);
+      expect(await db.surveyImport.count({ where: { organizationId: orgId } })).toBe(0);
+    });
+  });
 });
