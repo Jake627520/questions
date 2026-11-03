@@ -10,6 +10,13 @@ export const dynamic = "force-dynamic";
 /**
  * 公開問卷草稿暫存與讀取 API (Public Survey Draft)
  */
+class ResponseNotEditableError extends Error {
+  constructor() {
+    super("此作答已提交或已排除，不可再暫存");
+    this.name = "ResponseNotEditableError";
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { publicToken: string } }
@@ -57,6 +64,10 @@ export async function POST(
         if (resp && resp.surveyId !== survey.id) {
           throw new Error("無效的作答草稿記錄 (Cross-survey Draft ID Invalid)");
         }
+        // 已提交或已排除的作答不可被重開為草稿並清空答案
+        if (resp && resp.status !== ResponseStatus.IN_PROGRESS) {
+          throw new ResponseNotEditableError();
+        }
       }
 
       if (!resp) {
@@ -68,12 +79,6 @@ export async function POST(
           },
         });
       } else {
-        await tx.response.update({
-          where: { id: resp.id },
-          data: {
-            status: ResponseStatus.IN_PROGRESS,
-          },
-        });
         await tx.answer.deleteMany({ where: { responseId: resp.id } });
       }
 
@@ -113,6 +118,12 @@ export async function POST(
       responseId: savedDraft.id,
     });
   } catch (error: any) {
+    if (error instanceof ResponseNotEditableError) {
+      return NextResponse.json(
+        { error: "RESPONSE_NOT_EDITABLE", message: error.message },
+        { status: 409 }
+      );
+    }
     console.error("[Public Survey Draft Error]:", error);
     return NextResponse.json(
       { error: "草稿儲存失敗" },

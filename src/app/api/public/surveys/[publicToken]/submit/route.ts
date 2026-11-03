@@ -15,6 +15,13 @@ import {
 } from "@/lib/submission-integrity";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
+class ResponseNotEditableError extends Error {
+  constructor() {
+    super("此作答已提交或已排除，不可再提交");
+    this.name = "ResponseNotEditableError";
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { publicToken: string } }
@@ -282,6 +289,11 @@ export async function POST(
           throw new Error("無效的作答草稿記錄 (Cross-survey Draft ID Invalid)");
         }
 
+        // 只有未完成的草稿可以提交；已提交或已被排除的作答不可被覆寫或自行恢復
+        if (existingDraft.status !== ResponseStatus.IN_PROGRESS) {
+          throw new ResponseNotEditableError();
+        }
+
         // 更新現有草稿為正式提交
         response = await tx.response.update({
           where: { id: responseId },
@@ -435,6 +447,13 @@ export async function POST(
           }
         );
       }
+    }
+
+    if (error instanceof ResponseNotEditableError) {
+      return NextResponse.json(
+        { error: "RESPONSE_NOT_EDITABLE", message: error.message },
+        { status: 409 }
+      );
     }
 
     if (error instanceof DomainEligibilityError || error?.name === "DomainEligibilityError") {

@@ -288,4 +288,42 @@ describe("Security audit 2026-11 regression", () => {
     });
   });
 
+  // [Medium] 公開 submit/draft 不檢查作答狀態
+  describe("public submit/draft only accept IN_PROGRESS responses", () => {
+    it("public submit cannot resurrect an EXCLUDED response (409)", async () => {
+      const res = await publicSubmitPOST(
+        jsonReq(`http://localhost/api/public/surveys/${survey.publicToken}/submit`, "POST", { responseId: excluded.id, answers: [] }),
+        { params: { publicToken: survey.publicToken } }
+      );
+      expect(res.status).toBe(409);
+      const after = await db.response.findUnique({ where: { id: excluded.id } });
+      expect(after?.status).toBe(ResponseStatus.EXCLUDED);
+      expect(after?.excludedReason).toBe("灌票");
+    });
+
+    it("public draft cannot reopen and clear a COMPLETED response (409)", async () => {
+      const res = await publicDraftPOST(
+        jsonReq(`http://localhost/api/public/surveys/${survey.publicToken}/draft`, "POST", { responseId: completed.id, answers: [] }),
+        { params: { publicToken: survey.publicToken } }
+      );
+      expect(res.status).toBe(409);
+      expect(await statusOf(completed.id)).toBe(ResponseStatus.COMPLETED);
+      expect(await answerCount(completed.id)).toBe(1);
+    });
+
+    it("public draft and submit still work for an IN_PROGRESS response", async () => {
+      const draftRes = await publicDraftPOST(
+        jsonReq(`http://localhost/api/public/surveys/${survey.publicToken}/draft`, "POST", { responseId: inProgress.id, answers: [] }),
+        { params: { publicToken: survey.publicToken } }
+      );
+      expect(draftRes.status).toBe(200);
+      const submitRes = await publicSubmitPOST(
+        jsonReq(`http://localhost/api/public/surveys/${survey.publicToken}/submit`, "POST", { responseId: inProgress.id, answers: [] }),
+        { params: { publicToken: survey.publicToken } }
+      );
+      expect(submitRes.status).toBe(200);
+      expect(await statusOf(inProgress.id)).toBe(ResponseStatus.COMPLETED);
+    });
+  });
+
 });
