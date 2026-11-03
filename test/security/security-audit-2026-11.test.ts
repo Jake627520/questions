@@ -224,4 +224,68 @@ describe("Security audit 2026-11 regression", () => {
     });
   });
 
+  // [Medium] /api/surveys/[id]/responses/[responseId]
+  describe("single response GET/DELETE always require auth", () => {
+    it.each([
+      ["EXCLUDED", () => excluded],
+      ["IN_PROGRESS", () => inProgress],
+    ])("anonymous GET of %s response is rejected (401)", async (_label, pick) => {
+      const r = pick();
+      const res = await responseGET(getReq(`http://localhost/api/surveys/${survey.id}/responses/${r.id}`), {
+        params: { id: survey.id, responseId: r.id },
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it.each([
+      ["EXCLUDED", () => excluded],
+      ["IN_PROGRESS", () => inProgress],
+    ])("anonymous DELETE of %s response is rejected (401)", async (_label, pick) => {
+      const r = pick();
+      const res = await responseDELETE(
+        getReq(`http://localhost/api/surveys/${survey.id}/responses/${r.id}`, undefined, "DELETE"),
+        { params: { id: survey.id, responseId: r.id } }
+      );
+      expect(res.status).toBe(401);
+      expect(await statusOf(r.id)).toBeDefined();
+    });
+
+    it("non-member GET of IN_PROGRESS response is rejected (403)", async () => {
+      const res = await responseGET(
+        getReq(`http://localhost/api/surveys/${survey.id}/responses/${inProgress.id}`, tokens.outsider),
+        { params: { id: survey.id, responseId: inProgress.id } }
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it("EDITOR cannot delete an EXCLUDED response (needs MANAGERS)", async () => {
+      const res = await responseDELETE(
+        getReq(`http://localhost/api/surveys/${survey.id}/responses/${excluded.id}?force=true`, tokens.editor, "DELETE"),
+        { params: { id: survey.id, responseId: excluded.id } }
+      );
+      expect(res.status).toBe(403);
+      expect(await statusOf(excluded.id)).toBe(ResponseStatus.EXCLUDED);
+    });
+
+    it("VIEWER cannot delete an IN_PROGRESS draft; EDITOR can", async () => {
+      const url = `http://localhost/api/surveys/${survey.id}/responses/${inProgress.id}`;
+      const viewerRes = await responseDELETE(getReq(url, tokens.viewer, "DELETE"), {
+        params: { id: survey.id, responseId: inProgress.id },
+      });
+      expect(viewerRes.status).toBe(403);
+      const editorRes = await responseDELETE(getReq(url, tokens.editor, "DELETE"), {
+        params: { id: survey.id, responseId: inProgress.id },
+      });
+      expect(editorRes.status).toBe(200);
+    });
+
+    it("member can still load an IN_PROGRESS draft", async () => {
+      const res = await responseGET(
+        getReq(`http://localhost/api/surveys/${survey.id}/responses/${inProgress.id}`, tokens.viewer),
+        { params: { id: survey.id, responseId: inProgress.id } }
+      );
+      expect(res.status).toBe(200);
+    });
+  });
+
 });

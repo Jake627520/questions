@@ -25,16 +25,15 @@ export async function GET(
       return NextResponse.json({ error: "找不到該作答記錄" }, { status: 404 });
     }
 
-    // 正式填答紀錄（COMPLETED）屬於管理端敏感資料，必須驗證登入與組織權限
-    if (response.status === ResponseStatus.COMPLETED) {
-      const auth = await getCurrentUser(req);
-      if (!auth) {
-        return unauthorizedResponse();
-      }
-      const isMember = await isUserInOrganization(auth.user.id, response.survey.organizationId);
-      if (!isMember) {
-        return forbiddenResponse("您無權查看此組織的作答明細");
-      }
+    // 任何狀態的作答都是管理端資料，一律驗證登入與組織成員資格；
+    // 匿名填答者讀自己的草稿走 /api/public/surveys/[publicToken]/draft/[responseId]。
+    const auth = await getCurrentUser(req);
+    if (!auth) {
+      return unauthorizedResponse();
+    }
+    const isMember = await isUserInOrganization(auth.user.id, response.survey.organizationId);
+    if (!isMember) {
+      return forbiddenResponse("您無權查看此組織的作答明細");
     }
 
     const formattedAnswers = response.answers.map((a) => {
@@ -90,20 +89,31 @@ export async function DELETE(
       return NextResponse.json({ error: "找不到該回覆記錄" }, { status: 404 });
     }
 
-    // 正式回覆保護邏輯
-    if (response.status === ResponseStatus.COMPLETED) {
-      const auth = await getCurrentUser(req);
-      if (!auth) {
-        return unauthorizedResponse();
-      }
-      const { allowed, membership } = await hasRole(auth.user.id, response.survey.organizationId, ROLES.MANAGERS);
-      if (!membership) {
-        return forbiddenResponse("您非該組織成員，無權刪除此組織的回覆記錄");
-      }
-      if (!allowed) {
-        return forbiddenResponse("您的角色權限不足，需要 ADMIN 或 OWNER 權限才能刪除正式回覆記錄");
-      }
+    const auth = await getCurrentUser(req);
+    if (!auth) {
+      return unauthorizedResponse();
+    }
 
+    // 草稿 (IN_PROGRESS) 刪除需 EDITOR 以上；已提交或已排除的作答比照正式回覆，需 ADMIN 以上
+    const isDraft = response.status === ResponseStatus.IN_PROGRESS;
+    const { allowed, membership } = await hasRole(
+      auth.user.id,
+      response.survey.organizationId,
+      isDraft ? ROLES.EDITORS : ROLES.MANAGERS
+    );
+    if (!membership) {
+      return forbiddenResponse("您非該組織成員，無權刪除此組織的回覆記錄");
+    }
+    if (!allowed) {
+      return forbiddenResponse(
+        isDraft
+          ? "您的角色權限不足，需要 EDITOR 以上權限才能刪除作答草稿"
+          : "您的角色權限不足，需要 ADMIN 或 OWNER 權限才能刪除正式回覆記錄"
+      );
+    }
+
+    // 正式回覆保護邏輯
+    if (!isDraft) {
       if (!force) {
         return NextResponse.json(
           { error: "已完成的正式回覆不可直接刪除，避免誤刪正式資料。" },
