@@ -388,12 +388,12 @@ describe("Phase M10-D: Executive Reporting & Export Delivery", () => {
 
       // 1. Viewer 檢視報告 -> 200 OK
       const viewReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/executive`, tokenViewerA);
-      const viewRes = await executiveReportGET(viewReq, { params: { id: survey.id } });
+      const viewRes = await executiveReportGET(viewReq, { params: Promise.resolve({ id: survey.id }) });
       expect(viewRes.status).toBe(200);
 
       // 2. Viewer 匯出報告 -> 403 Forbidden
       const exportReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/export?format=xlsx`, tokenViewerA);
-      const exportRes = await reportExportGET(exportReq, { params: { id: survey.id } });
+      const exportRes = await reportExportGET(exportReq, { params: Promise.resolve({ id: survey.id }) });
       expect(exportRes.status).toBe(403);
     });
 
@@ -420,13 +420,13 @@ describe("Phase M10-D: Executive Reporting & Export Delivery", () => {
 
       // 1. Editor 匯出 XLSX -> 200 OK
       const xlsxReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/export?format=xlsx`, tokenEditorA);
-      const xlsxRes = await reportExportGET(xlsxReq, { params: { id: survey.id } });
+      const xlsxRes = await reportExportGET(xlsxReq, { params: Promise.resolve({ id: survey.id }) });
       expect(xlsxRes.status).toBe(200);
       expect(xlsxRes.headers.get("Content-Type")).toContain("spreadsheetml.sheet");
 
       // 2. Owner 匯出 CSV -> 200 OK
       const csvReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/export?format=csv`, tokenOwnerA);
-      const csvRes = await reportExportGET(csvReq, { params: { id: survey.id } });
+      const csvRes = await reportExportGET(csvReq, { params: Promise.resolve({ id: survey.id }) });
       expect(csvRes.status).toBe(200);
       expect(csvRes.headers.get("Content-Type")).toContain("text/csv");
     });
@@ -443,17 +443,17 @@ describe("Phase M10-D: Executive Reporting & Export Delivery", () => {
 
       // 1. 跨租戶 Tenant B 存取 Executive Report -> 403
       const crossReq1 = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/executive`, tokenTenantB);
-      const crossRes1 = await executiveReportGET(crossReq1, { params: { id: survey.id } });
+      const crossRes1 = await executiveReportGET(crossReq1, { params: Promise.resolve({ id: survey.id }) });
       expect(crossRes1.status).toBe(403);
 
       // 2. 跨租戶 Tenant B 存取 Export -> 403
       const crossReq2 = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/export`, tokenTenantB);
-      const crossRes2 = await reportExportGET(crossReq2, { params: { id: survey.id } });
+      const crossRes2 = await reportExportGET(crossReq2, { params: Promise.resolve({ id: survey.id }) });
       expect(crossRes2.status).toBe(403);
 
       // 3. 未登入存取 -> 401
       const unauthReq = new NextRequest(`http://localhost/api/surveys/${survey.id}/reports/executive`, { method: "GET" });
-      const unauthRes = await executiveReportGET(unauthReq, { params: { id: survey.id } });
+      const unauthRes = await executiveReportGET(unauthReq, { params: Promise.resolve({ id: survey.id }) });
       expect(unauthRes.status).toBe(401);
     });
   });
@@ -504,7 +504,7 @@ describe("Phase M10-D: Executive Reporting & Export Delivery", () => {
 
       // 執行 API 呼叫
       const req = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/executive`, tokenOwnerA);
-      const res = await executiveReportGET(req, { params: { id: survey.id } });
+      const res = await executiveReportGET(req, { params: Promise.resolve({ id: survey.id }) });
       expect(res.status).toBe(200);
 
       const json = await res.json();

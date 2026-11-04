@@ -19,10 +19,10 @@ class ResponseNotEditableError extends Error {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { publicToken: string } }
+  { params }: { params: Promise<{ publicToken: string }> }
 ) {
   try {
-    const { publicToken } = params;
+    const { publicToken } = await params;
 
     const limited = await enforceRateLimit({
       key: `draft:${publicToken}:${extractClientIp(req)}`,

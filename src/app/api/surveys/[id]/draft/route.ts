@@ -7,13 +7,12 @@ import {
   unauthorizedResponse,
   isUserInOrganization,
   forbiddenResponse,
-  hasRole,
-  ROLES,
+  denyUnlessCanResumeResponse,
 } from "@/lib/auth";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 登入成員的預覽/編輯草稿路徑；匿名填答走 /api/public/surveys/[publicToken]/draft。
@@ -22,7 +21,7 @@ export async function POST(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const responseId = body.responseId as string | undefined;
     const answersInput = (body.answers || []) as AnswerSubmission[];
@@ -55,7 +54,7 @@ export async function POST(
     if (responseId) {
       const existing = await db.response.findUnique({
         where: { id: responseId },
-        select: { surveyId: true, status: true },
+        select: { surveyId: true, status: true, createdById: true },
       });
       if (!existing || existing.surveyId !== survey.id) {
         return NextResponse.json(
@@ -64,19 +63,14 @@ export async function POST(
         );
       }
 
-      // 續寫既有作答會覆寫他人資料，比照修改作答狀態要求 EDITOR 以上
-      const { allowed } = await hasRole(auth.user.id, survey.organizationId, ROLES.EDITORS);
-      if (!allowed) {
-        return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能續寫既有作答");
-      }
-
-      // 只有未完成的草稿可以續寫；已提交 (COMPLETED) 或已排除 (EXCLUDED) 的作答不可變更
-      if (existing.status !== ResponseStatus.IN_PROGRESS) {
-        return NextResponse.json(
-          { error: "RESPONSE_NOT_EDITABLE", message: "此作答已提交或已排除，不可再暫存" },
-          { status: 409 }
-        );
-      }
+      // 建立者可續寫自己的草稿；其他人只有 EDITOR 以上能改，且都只能動 IN_PROGRESS
+      const denied = await denyUnlessCanResumeResponse(
+        auth.user.id,
+        survey.organizationId,
+        existing,
+        "此作答已提交或已排除，不可再暫存"
+      );
+      if (denied) return denied;
     }
 
     // 建立或更新草稿（ResponseStatus.IN_PROGRESS）
@@ -92,6 +86,7 @@ export async function POST(
             surveyId: survey.id,
             version: survey.version,
             status: ResponseStatus.IN_PROGRESS,
+            createdById: auth.user.id,
             totalScore: null,
             maxScore: null,
             percentage: null,

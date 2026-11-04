@@ -353,7 +353,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
   describe("1. Data Correctness (數據指標計算正確性)", () => {
     it("1. answeredCount: 正確計算該題之有效填答筆數", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -368,7 +368,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
 
     it("2. notAnsweredCount: 正確計算未填答筆數 (totalResponses - answeredCount)", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q2 = data.questions.find((q: any) => q.code === "Q2"); // 4 - 3 = 1
@@ -379,7 +379,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
 
     it("3. responseRate: 正確計算該題填答率 (answeredCount / totalResponses * 100)", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q1 = data.questions.find((q: any) => q.code === "Q1");
@@ -390,7 +390,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
 
     it("4. choice count: 正確統計單選題各選項被選擇次數", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q1 = data.questions.find((q: any) => q.code === "Q1");
@@ -407,7 +407,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
 
     it("5. choice percentage: 選項百分比分母明確為 answeredCount，非 totalResponses", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q1 = data.questions.find((q: any) => q.code === "Q1");
@@ -421,7 +421,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
 
     it("6. rating mean: 正確計算數值題統計平均數", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q3 = data.questions.find((q: any) => q.code === "Q3"); // scores: [4, 5, 3]
@@ -432,7 +432,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
 
     it("7. rating median: 正確計算數值題統計中位數", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q3 = data.questions.find((q: any) => q.code === "Q3");
@@ -441,7 +441,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
 
     it("8. rating min/max: 正確計算數值題統計極小值與極大值", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q3 = data.questions.find((q: any) => q.code === "Q3");
@@ -451,7 +451,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
 
     it("9. sample SD: 正確計算樣本標準差 s = sqrt(sum((x-mean)^2)/(n-1))", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q3 = data.questions.find((q: any) => q.code === "Q3"); // values: 4, 5, 3. mean=4. variance=((0)^2 + (1)^2 + (-1)^2)/(3-1) = 2/2 = 1. SD = 1.
@@ -487,7 +487,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
       });
 
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${singleRespSurvey.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: singleRespSurvey.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: singleRespSurvey.id }) });
       const data = await res.json();
 
       const qs1 = data.questions[0];
@@ -500,7 +500,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
   describe("2. Edge Cases (極端與邊界情境驗證)", () => {
     it("11. zero responses: 問卷 0 筆回覆時，各項計數為 0，statistics 為 null", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyAEmpty.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyAEmpty.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyAEmpty.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -538,7 +538,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
       });
 
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${unansSurvey.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: unansSurvey.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: unansSurvey.id }) });
       const data = await res.json();
 
       expect(data.questions[0].answeredCount).toBe(0);
@@ -577,13 +577,13 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
       });
 
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${malformedSurvey.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: malformedSurvey.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: malformedSurvey.id }) });
       expect(res.status).toBe(200);
     });
 
     it("14. multi-choice question: 多選題陣列格式 (['X', 'Y']) 正確累加各選項次數與百分比", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q2 = data.questions.find((q: any) => q.code === "Q2"); // responses had: ['X','Y'], ['Y'], ['Z']. answeredCount = 3.
@@ -601,7 +601,7 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
 
     it("15. text question: 文字題僅統計有效與未填筆數，零假造 NLP / AI 數據", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       const data = await res.json();
 
       const q5 = data.questions.find((q: any) => q.code === "Q5");
@@ -615,31 +615,31 @@ describe("Phase M9-E: Question-level Analytics & Item Statistics Suite", () => {
   describe("3. Security & Multi-Tenant Boundaries (安全與租戶邊界)", () => {
     it("16. same-org access: 同組織成員能正常存取題目統計 (200 OK)", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenAdminA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       expect(res.status).toBe(200);
     });
 
     it("17. cross-org access: 跨組織成員嘗試存取其他組織問卷之題目統計被嚴格阻擋 (403 Forbidden)", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenUserB);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       expect(res.status).toBe(403);
     });
 
     it("18. unauthenticated: 未登入存取題目統計回傳 401 Unauthorized", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       expect(res.status).toBe(401);
     });
 
     it("19. RBAC VIEWER: VIEWER 角色具備題目統計唯讀檢視權限 (200 OK)", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA1.id}/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: surveyA1.id } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: surveyA1.id }) });
       expect(res.status).toBe(200);
     });
 
     it("20. invalid survey ID: 查詢不存在之問卷 ID 回傳 404 NOT_FOUND", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/non-existent-id/analytics/questions`, tokenViewerA);
-      const res = await questionAnalyticsGET(req, { params: { id: "non-existent-id" } });
+      const res = await questionAnalyticsGET(req, { params: Promise.resolve({ id: "non-existent-id" }) });
       expect(res.status).toBe(404);
     });
   });

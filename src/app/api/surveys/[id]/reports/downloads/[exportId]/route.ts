@@ -23,10 +23,10 @@ import {
 import { isExportExpired } from "@/lib/report-governance";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
     exportId: string;
-  };
+  }>;
 }
 
 /**
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       return unauthorizedResponse("請先登入以下載報告");
     }
 
-    const { id, exportId } = params;
+    const { id, exportId } = await params;
 
     // 1. 查詢匯出審計紀錄
     const exportRecord = await db.reportExport.findUnique({

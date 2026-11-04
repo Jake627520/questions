@@ -21,7 +21,7 @@ describe("500 responses do not leak internal error messages", () => {
   it("GET /api/surveys/:id", async () => {
     vi.spyOn(db.survey, "findUnique").mockRejectedValue(new Error(secret));
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const res = await surveyGET(new NextRequest("http://localhost/api/surveys/x"), { params: { id: "x" } });
+    const res = await surveyGET(new NextRequest("http://localhost/api/surveys/x"), { params: Promise.resolve({ id: "x" }) });
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(JSON.stringify(body)).not.toContain("secret_col");
@@ -35,7 +35,7 @@ describe("500 responses do not leak internal error messages", () => {
     vi.spyOn(db.response, "findUnique").mockRejectedValue(new Error(secret));
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await handler(new NextRequest("http://localhost/api/surveys/x/responses/y", { method }), {
-      params: { id: "x", responseId: "y" },
+      params: Promise.resolve({ id: "x", responseId: "y" }),
     });
     expect(res.status).toBe(500);
     const body = await res.json();

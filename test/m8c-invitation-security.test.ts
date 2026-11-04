@@ -148,7 +148,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "EDITOR" }),
       });
 
-      const res = await orgInvitationsPOST(req, { params: { id: orgA.id } });
+      const res = await orgInvitationsPOST(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(201);
       const data = await res.json();
 
@@ -166,7 +166,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "VIEWER" }),
       });
 
-      const res = await orgInvitationsPOST(req, { params: { id: orgA.id } });
+      const res = await orgInvitationsPOST(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(201);
       const data = await res.json();
       expect(data.success).toBe(true);
@@ -179,7 +179,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "VIEWER" }),
       });
 
-      const res = await orgInvitationsPOST(req, { params: { id: orgA.id } });
+      const res = await orgInvitationsPOST(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -190,7 +190,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "VIEWER" }),
       });
 
-      const res = await orgInvitationsPOST(req, { params: { id: orgA.id } });
+      const res = await orgInvitationsPOST(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -201,7 +201,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "VIEWER" }),
       });
 
-      const res = await orgInvitationsPOST(req, { params: { id: orgA.id } });
+      const res = await orgInvitationsPOST(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -212,7 +212,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "OWNER" }),
       });
 
-      const resOwnerRole = await orgInvitationsPOST(reqOwnerRole, { params: { id: orgA.id } });
+      const resOwnerRole = await orgInvitationsPOST(reqOwnerRole, { params: Promise.resolve({ id: orgA.id }) });
       expect(resOwnerRole.status).toBe(400);
 
       const reqInvalidRole = new NextRequest(`http://localhost:3000/api/organizations/${orgA.id}/invitations`, {
@@ -220,7 +220,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenOwnerA}` },
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "SUPERADMIN" }),
       });
-      const resInvalidRole = await orgInvitationsPOST(reqInvalidRole, { params: { id: orgA.id } });
+      const resInvalidRole = await orgInvitationsPOST(reqInvalidRole, { params: Promise.resolve({ id: orgA.id }) });
       expect(resInvalidRole.status).toBe(400);
     });
 
@@ -236,7 +236,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         }),
       });
 
-      const res = await orgInvitationsPOST(req, { params: { id: orgA.id } });
+      const res = await orgInvitationsPOST(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(201);
       const data = await res.json();
 
@@ -264,7 +264,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "EDITOR" }),
       });
 
-      const res = await orgInvitationsPOST(req, { params: { id: orgA.id } });
+      const res = await orgInvitationsPOST(req, { params: Promise.resolve({ id: orgA.id }) });
       const data = await res.json();
       const rawToken = data.rawToken;
       const expectedHash = hashInvitationToken(rawToken);
@@ -284,7 +284,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
       const reqList = new NextRequest(`http://localhost:3000/api/organizations/${orgA.id}/invitations`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenOwnerA}` },
       });
-      const resList = await orgInvitationsGET(reqList, { params: { id: orgA.id } });
+      const resList = await orgInvitationsGET(reqList, { params: Promise.resolve({ id: orgA.id }) });
       const dataList = await resList.json();
       for (const inv of dataList.invitations) {
         expect(inv.tokenHash).toBeUndefined();
@@ -311,7 +311,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
       });
 
       const req = new NextRequest(`http://localhost:3000/api/invitations/${rawToken}`);
-      const res = await publicInviteGET(req, { params: { token: rawToken } });
+      const res = await publicInviteGET(req, { params: Promise.resolve({ token: rawToken }) });
       expect(res.status).toBe(200);
       const data = await res.json();
 
@@ -331,7 +331,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
     it("9. 無效的 Token 查詢回傳 404 (防止探測)", async () => {
       const forgedToken = "completely_fake_non_existent_token_123456789";
       const req = new NextRequest(`http://localhost:3000/api/invitations/${forgedToken}`);
-      const res = await publicInviteGET(req, { params: { token: forgedToken } });
+      const res = await publicInviteGET(req, { params: Promise.resolve({ token: forgedToken }) });
       expect(res.status).toBe(404);
     });
 
@@ -350,7 +350,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
       });
 
       const req = new NextRequest(`http://localhost:3000/api/invitations/${rawToken}`);
-      const res = await publicInviteGET(req, { params: { token: rawToken } });
+      const res = await publicInviteGET(req, { params: Promise.resolve({ token: rawToken }) });
       expect(res.status).toBe(404);
     });
 
@@ -370,7 +370,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
       });
 
       const req = new NextRequest(`http://localhost:3000/api/invitations/${rawToken}`);
-      const res = await publicInviteGET(req, { params: { token: rawToken } });
+      const res = await publicInviteGET(req, { params: Promise.resolve({ token: rawToken }) });
       expect(res.status).toBe(404);
     });
 
@@ -390,7 +390,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
       });
 
       const req = new NextRequest(`http://localhost:3000/api/invitations/${rawToken}`);
-      const res = await publicInviteGET(req, { params: { token: rawToken } });
+      const res = await publicInviteGET(req, { params: Promise.resolve({ token: rawToken }) });
       expect(res.status).toBe(404);
     });
   });
@@ -418,7 +418,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenCandidate}` },
       });
 
-      const res = await acceptInvitePOST(req, { params: { token: rawToken } });
+      const res = await acceptInvitePOST(req, { params: Promise.resolve({ token: rawToken }) });
       expect(res.status).toBe(200);
       const data = await res.json();
 
@@ -461,7 +461,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenOtherEmail}` },
       });
 
-      const res = await acceptInvitePOST(req, { params: { token: rawToken } });
+      const res = await acceptInvitePOST(req, { params: Promise.resolve({ token: rawToken }) });
       expect(res.status).toBe(403);
       const data = await res.json();
       expect(data.error).toBe("EMAIL_MISMATCH");
@@ -485,7 +485,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         method: "POST",
       });
 
-      const res = await acceptInvitePOST(req, { params: { token: rawToken } });
+      const res = await acceptInvitePOST(req, { params: Promise.resolve({ token: rawToken }) });
       expect(res.status).toBe(401);
     });
 
@@ -509,7 +509,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenViewerA}` },
       });
 
-      const res = await acceptInvitePOST(req, { params: { token: rawToken } });
+      const res = await acceptInvitePOST(req, { params: Promise.resolve({ token: rawToken }) });
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.alreadyMember).toBe(true);
@@ -549,8 +549,8 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         });
 
       const [res1, res2] = await Promise.all([
-        acceptInvitePOST(makeReq(), { params: { token: rawToken } }),
-        acceptInvitePOST(makeReq(), { params: { token: rawToken } }),
+        acceptInvitePOST(makeReq(), { params: Promise.resolve({ token: rawToken }) }),
+        acceptInvitePOST(makeReq(), { params: Promise.resolve({ token: rawToken }) }),
       ]);
 
       // 兩者皆能處理完成，且 DB 中絕對僅有一筆 Membership
@@ -594,7 +594,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         }
       );
       const resCross = await revokePOST(reqCross, {
-        params: { id: orgA.id, invitationId: inv.id },
+        params: Promise.resolve({ id: orgA.id, invitationId: inv.id }),
       });
       expect(resCross.status).toBe(403);
 
@@ -607,7 +607,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         }
       );
       const resAdmin = await revokePOST(reqAdmin, {
-        params: { id: orgA.id, invitationId: inv.id },
+        params: Promise.resolve({ id: orgA.id, invitationId: inv.id }),
       });
       expect(resAdmin.status).toBe(200);
 
@@ -620,7 +620,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         }
       );
       const resAccept = await acceptInvitePOST(reqAccept, {
-        params: { token: rawToken },
+        params: Promise.resolve({ token: rawToken }),
       });
       expect(resAccept.status).toBe(400);
     });
@@ -632,7 +632,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenOwnerA}` },
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "VIEWER" }),
       });
-      const res1 = await orgInvitationsPOST(req1, { params: { id: orgA.id } });
+      const res1 = await orgInvitationsPOST(req1, { params: Promise.resolve({ id: orgA.id }) });
       const data1 = await res1.json();
       const token1 = data1.rawToken;
 
@@ -642,7 +642,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenOwnerA}` },
         body: JSON.stringify({ email: "m8c-candidate@example.com", role: "EDITOR" }),
       });
-      const res2 = await orgInvitationsPOST(req2, { params: { id: orgA.id } });
+      const res2 = await orgInvitationsPOST(req2, { params: Promise.resolve({ id: orgA.id }) });
       const data2 = await res2.json();
       const token2 = data2.rawToken;
 
@@ -651,7 +651,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         method: "POST",
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenCandidate}` },
       });
-      const resAcceptOld = await acceptInvitePOST(reqAcceptOld, { params: { token: token1 } });
+      const resAcceptOld = await acceptInvitePOST(reqAcceptOld, { params: Promise.resolve({ token: token1 }) });
       expect(resAcceptOld.status).toBe(400);
 
       // 4. 使用新 Token2 接受 -> 200 成功
@@ -659,7 +659,7 @@ describe("Phase M8-C: Enterprise Invitation System Security Suite", () => {
         method: "POST",
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenCandidate}` },
       });
-      const resAcceptNew = await acceptInvitePOST(reqAcceptNew, { params: { token: token2 } });
+      const resAcceptNew = await acceptInvitePOST(reqAcceptNew, { params: Promise.resolve({ token: token2 }) });
       expect(resAcceptNew.status).toBe(200);
     });
   });

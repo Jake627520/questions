@@ -27,7 +27,7 @@ import { escapeFormulaString } from "@/lib/excel-formula-safety";
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -41,7 +41,7 @@ export async function GET(
     });
     if (limited) return limited;
 
-    const { id } = params;
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
 
     const rowQuestionId = searchParams.get("rowQuestionId") || searchParams.get("questionA");

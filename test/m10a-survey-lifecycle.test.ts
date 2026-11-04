@@ -258,11 +258,11 @@ describe("Phase M10-A.1: Survey Lifecycle State Machine & Version Boundary Suite
 
     it("POST /publish: 非組織成員與 Viewer 403，Editor 成功發布並生成 publicToken", async () => {
       const reqViewer = makeAuthReq(`http://localhost/api/surveys/${surveyA.id}/publish`, tokenViewerA);
-      const resViewer = await publishPOST(reqViewer, { params: { id: surveyA.id } });
+      const resViewer = await publishPOST(reqViewer, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resViewer.status).toBe(403);
 
       const reqEditor = makeAuthReq(`http://localhost/api/surveys/${surveyA.id}/publish`, tokenEditorA);
-      const resEditor = await publishPOST(reqEditor, { params: { id: surveyA.id } });
+      const resEditor = await publishPOST(reqEditor, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resEditor.status).toBe(200);
 
       const json = await resEditor.json();
@@ -278,7 +278,7 @@ describe("Phase M10-A.1: Survey Lifecycle State Machine & Version Boundary Suite
       });
 
       const req = makeAuthReq(`http://localhost/api/surveys/${surveyA.id}/close`, tokenEditorA);
-      const res = await closePOST(req, { params: { id: surveyA.id } });
+      const res = await closePOST(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.survey.status).toBe(SurveyStatus.CLOSED);
@@ -292,20 +292,20 @@ describe("Phase M10-A.1: Survey Lifecycle State Machine & Version Boundary Suite
 
       // Archive
       const reqArchive = makeAuthReq(`http://localhost/api/surveys/${surveyA.id}/archive`, tokenEditorA);
-      const resArchive = await archivePOST(reqArchive, { params: { id: surveyA.id } });
+      const resArchive = await archivePOST(reqArchive, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resArchive.status).toBe(200);
       expect((await resArchive.json()).survey.status).toBe(SurveyStatus.ARCHIVED);
 
       // Restore
       const reqRestore = makeAuthReq(`http://localhost/api/surveys/${surveyA.id}/restore`, tokenEditorA);
-      const resRestore = await restorePOST(reqRestore, { params: { id: surveyA.id } });
+      const resRestore = await restorePOST(reqRestore, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resRestore.status).toBe(200);
       expect((await resRestore.json()).survey.status).toBe(SurveyStatus.DRAFT);
     });
 
     it("POST /duplicate: 複製為全新獨立問卷 (v1, parentSurveyId = null)", async () => {
       const req = makeAuthReq(`http://localhost/api/surveys/${surveyA.id}/duplicate`, tokenEditorA);
-      const res = await duplicatePOST(req, { params: { id: surveyA.id } });
+      const res = await duplicatePOST(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.version).toBe(1);
@@ -329,7 +329,7 @@ describe("Phase M10-A.1: Survey Lifecycle State Machine & Version Boundary Suite
       const reqDeletePublished = makeAuthReq(`http://localhost/api/surveys/${surveyA.id}`, tokenOwnerA, {
         method: "DELETE",
       });
-      const resDeletePublished = await surveyDELETE(reqDeletePublished, { params: { id: surveyA.id } });
+      const resDeletePublished = await surveyDELETE(reqDeletePublished, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resDeletePublished.status).toBe(400);
 
       // 建立 response
@@ -344,7 +344,7 @@ describe("Phase M10-A.1: Survey Lifecycle State Machine & Version Boundary Suite
       const reqDeleteWithResponses = makeAuthReq(`http://localhost/api/surveys/${surveyA.id}`, tokenOwnerA, {
         method: "DELETE",
       });
-      const resDeleteWithResponses = await surveyDELETE(reqDeleteWithResponses, { params: { id: surveyA.id } });
+      const resDeleteWithResponses = await surveyDELETE(reqDeleteWithResponses, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resDeleteWithResponses.status).toBe(400);
     });
   });
@@ -381,14 +381,14 @@ describe("Phase M10-A.1: Survey Lifecycle State Machine & Version Boundary Suite
       });
 
       const getReq = makePublicReq(`http://localhost/api/public/surveys/${pToken}`);
-      const getRes = await publicGET(getReq, { params: { publicToken: pToken } });
+      const getRes = await publicGET(getReq, { params: Promise.resolve({ publicToken: pToken }) });
       expect(getRes.status).toBe(403);
       expect((await getRes.json()).error).toBe("QUOTA_EXCEEDED");
 
       const submitReq = makePublicReq(`http://localhost/api/public/surveys/${pToken}/submit`, {
         answers: [{ questionCode: "Q1", value: "a" }],
       });
-      const submitRes = await publicSubmitPOST(submitReq, { params: { publicToken: pToken } });
+      const submitRes = await publicSubmitPOST(submitReq, { params: Promise.resolve({ publicToken: pToken }) });
       expect(submitRes.status).toBe(403);
       expect((await submitRes.json()).error).toBe("QUOTA_EXCEEDED");
     });
@@ -465,7 +465,7 @@ describe("Phase M10-A.1: Survey Lifecycle State Machine & Version Boundary Suite
 
       // Clone v2
       const reqClone = makeAuthReq(`http://localhost/api/surveys/${surveyV1.id}/clone-version`, tokenEditorA);
-      const resClone = await cloneVersionPOST(reqClone, { params: { id: surveyV1.id } });
+      const resClone = await cloneVersionPOST(reqClone, { params: Promise.resolve({ id: surveyV1.id }) });
       expect(resClone.status).toBe(200);
       const cloneJson = await resClone.json();
       const surveyV2Id = cloneJson.surveyId;
@@ -477,7 +477,7 @@ describe("Phase M10-A.1: Survey Lifecycle State Machine & Version Boundary Suite
         tokenEditorA,
         { method: "GET" }
       );
-      const resCrosstabV1 = await crosstabGET(reqCrosstabV1, { params: { id: surveyV1.id } });
+      const resCrosstabV1 = await crosstabGET(reqCrosstabV1, { params: Promise.resolve({ id: surveyV1.id }) });
       expect(resCrosstabV1.status).toBe(200);
       const jsonV1 = await resCrosstabV1.json();
       expect(jsonV1.result.grandTotal).toBe(10);
@@ -496,7 +496,7 @@ describe("Phase M10-A.1: Survey Lifecycle State Machine & Version Boundary Suite
         tokenEditorA,
         { method: "GET" }
       );
-      const resCrosstabV2 = await crosstabGET(reqCrosstabV2, { params: { id: surveyV2Id } });
+      const resCrosstabV2 = await crosstabGET(reqCrosstabV2, { params: Promise.resolve({ id: surveyV2Id }) });
       expect(resCrosstabV2.status).toBe(200);
       const jsonV2 = await resCrosstabV2.json();
       expect(jsonV2.result.grandTotal).toBe(0);

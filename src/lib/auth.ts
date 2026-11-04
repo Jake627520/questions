@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { User, Session, Organization, Role } from "@prisma/client";
+import { User, Session, Organization, Role, ResponseStatus } from "@prisma/client";
 
 export const SESSION_COOKIE_NAME = "survey_session";
 export const ACTIVE_ORG_COOKIE_NAME = "survey_active_org";
@@ -178,7 +178,7 @@ export async function getCurrentUser(req?: NextRequest): Promise<AuthContext | n
   // 2. 若未提供 req 或 req.cookies 無值，嘗試從 Next.js headers cookies() 讀取
   if (!token) {
     try {
-      const cookieStore = cookies();
+      const cookieStore = await cookies();
       token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
     } catch {
       // 在純測試環境或無 cookies() 上下文時忽略
@@ -352,6 +352,35 @@ export function forbiddenResponse(
 }
 
 /**
+ * 會員填答續寫既有 responseId。
+ * 建立者本人（呼叫端已確認是組織成員、問卷未關閉）可以續寫自己的 IN_PROGRESS。
+ * 其他人只有 EDITOR 以上可以續寫，避免 VIEWER 覆寫別人的草稿或已完成作答。
+ * 沒有 createdById 的舊資料／匿名公開作答，只有 EDITOR 以上能從會員路徑續寫。
+ * 通過身分檢查但狀態不是 IN_PROGRESS 時回 409，避免已提交或已排除的作答被改寫。
+ */
+export async function denyUnlessCanResumeResponse(
+  userId: string,
+  organizationId: string,
+  existing: { createdById: string | null; status: ResponseStatus },
+  notEditableMessage: string
+): Promise<NextResponse | null> {
+  const isCreator = existing.createdById !== null && existing.createdById === userId;
+  if (!isCreator) {
+    const { allowed } = await hasRole(userId, organizationId, ROLES.EDITORS);
+    if (!allowed) {
+      return forbiddenResponse("您只能續寫自己的作答；修改他人作答需要 EDITOR 以上權限");
+    }
+  }
+  if (existing.status !== ResponseStatus.IN_PROGRESS) {
+    return NextResponse.json(
+      { error: "RESPONSE_NOT_EDITABLE", message: notEditableMessage },
+      { status: 409 }
+    );
+  }
+  return null;
+}
+
+/**
  * 產生 256-bit 高熵、URL-safe 且不可預測之 Public Token (用於公開填答 URL)
  */
 export function generatePublicToken(): string {
@@ -398,7 +427,7 @@ export async function getActiveOrganizationContext(req?: NextRequest): Promise<{
   // 2. 嘗試從 Next.js headers cookies() 讀取
   if (!cookieOrgId) {
     try {
-      const cookieStore = cookies();
+      const cookieStore = await cookies();
       cookieOrgId = cookieStore.get(ACTIVE_ORG_COOKIE_NAME)?.value;
     } catch {
       // 測試環境或無上下文時忽略

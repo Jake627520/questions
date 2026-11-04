@@ -275,7 +275,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
 
     it("未登入者存取 GET /api/surveys/:id?mode=management 應得到 401", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyA.id}?mode=management`);
-      const res = await surveyGET(req, { params: { id: surveyA.id } });
+      const res = await surveyGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
 
@@ -284,25 +284,25 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         method: "PATCH",
         body: JSON.stringify({ title: "駭客修改" }),
       });
-      const res = await surveyPATCH(req, { params: { id: surveyA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
 
     it("未登入者存取 GET /api/surveys/:id/responses 應得到 401", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyA.id}/responses`);
-      const res = await responsesGET(req, { params: { id: surveyA.id } });
+      const res = await responsesGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
 
     it("未登入者存取 GET /api/surveys/:id/stats 應得到 401", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyA.id}/stats`);
-      const res = await statsGET(req, { params: { id: surveyA.id } });
+      const res = await statsGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
 
     it("未登入者存取 GET /api/surveys/:id/export 應得到 401", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyA.id}/export`);
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
 
@@ -310,7 +310,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyA.id}/clone-version`, {
         method: "POST",
       });
-      const res = await clonePOST(req, { params: { id: surveyA.id } });
+      const res = await clonePOST(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
   });
@@ -325,7 +325,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenAdminA}` },
         body: JSON.stringify({ title: "竄改跨組織問卷" }),
       });
-      const res = await surveyPATCH(req, { params: { id: surveyB.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -333,7 +333,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyB.id}/responses`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenAdminA}` },
       });
-      const res = await responsesGET(req, { params: { id: surveyB.id } });
+      const res = await responsesGET(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -341,7 +341,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyB.id}/stats`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenAdminA}` },
       });
-      const res = await statsGET(req, { params: { id: surveyB.id } });
+      const res = await statsGET(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -349,7 +349,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyB.id}/export`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenAdminA}` },
       });
-      const res = await exportGET(req, { params: { id: surveyB.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -358,7 +358,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         method: "POST",
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenAdminA}` },
       });
-      const res = await clonePOST(req, { params: { id: surveyB.id } });
+      const res = await clonePOST(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -366,13 +366,13 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
       const req = new NextRequest(`http://localhost:3000/api/surveys/import/${importBId}`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenAdminA}` },
       });
-      const res = await importDetailGET(req, { params: { importId: importBId } });
+      const res = await importDetailGET(req, { params: Promise.resolve({ importId: importBId }) });
       expect(res.status).toBe(403);
 
       const reqCsv = new NextRequest(`http://localhost:3000/api/surveys/import/${importBId}/errors`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenAdminA}` },
       });
-      const resCsv = await importErrorCsvGET(reqCsv, { params: { importId: importBId } });
+      const resCsv = await importErrorCsvGET(reqCsv, { params: Promise.resolve({ importId: importBId }) });
       expect(resCsv.status).toBe(403);
     });
   });
@@ -387,7 +387,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenViewerA}` },
         body: JSON.stringify({ title: "Viewer 越權修改" }),
       });
-      const res = await surveyPATCH(req, { params: { id: surveyA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -395,7 +395,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyA.id}/export`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenViewerA}` },
       });
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -404,7 +404,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         method: "POST",
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenViewerA}` },
       });
-      const res = await clonePOST(req, { params: { id: surveyA.id } });
+      const res = await clonePOST(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -417,7 +417,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         }
       );
       const res = await responseSingleDELETE(req, {
-        params: { id: surveyA.id, responseId: responseA.id },
+        params: Promise.resolve({ id: surveyA.id, responseId: responseA.id }),
       });
       expect(res.status).toBe(403);
     });
@@ -491,25 +491,25 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
   describe("5. [威脅情境 5] Public Token 邊界與狀態防護", () => {
     it("嘗試拿內部 survey.id 存取公開端點應回傳 404", async () => {
       const req = new NextRequest(`http://localhost:3000/api/public/surveys/${surveyA.id}`);
-      const res = await publicSurveyGET(req, { params: { publicToken: surveyA.id } });
+      const res = await publicSurveyGET(req, { params: Promise.resolve({ publicToken: surveyA.id }) });
       expect(res.status).toBe(404);
     });
 
     it("DRAFT 草稿問卷透過 publicToken 存取應回傳 404", async () => {
       const req = new NextRequest(`http://localhost:3000/api/public/surveys/${draftSurveyA.publicToken}`);
-      const res = await publicSurveyGET(req, { params: { publicToken: draftSurveyA.publicToken } });
+      const res = await publicSurveyGET(req, { params: Promise.resolve({ publicToken: draftSurveyA.publicToken }) });
       expect(res.status).toBe(404);
     });
 
     it("CLOSED 結束問卷透過 publicToken 存取應回傳 404", async () => {
       const req = new NextRequest(`http://localhost:3000/api/public/surveys/${closedSurveyA.publicToken}`);
-      const res = await publicSurveyGET(req, { params: { publicToken: closedSurveyA.publicToken } });
+      const res = await publicSurveyGET(req, { params: Promise.resolve({ publicToken: closedSurveyA.publicToken }) });
       expect(res.status).toBe(404);
     });
 
     it("公開回傳資料完全脫敏（無 score, scoringEnabled, reverseScore, organizationId, createdById）", async () => {
       const req = new NextRequest(`http://localhost:3000/api/public/surveys/${surveyA.publicToken}`);
-      const res = await publicSurveyGET(req, { params: { publicToken: surveyA.publicToken } });
+      const res = await publicSurveyGET(req, { params: Promise.resolve({ publicToken: surveyA.publicToken }) });
       const data = await res.json();
 
       expect(data.survey.organizationId).toBeUndefined();
@@ -537,7 +537,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         }),
       });
 
-      const res = await publicSurveySubmitPOST(req, { params: { publicToken: surveyA.publicToken } });
+      const res = await publicSurveySubmitPOST(req, { params: Promise.resolve({ publicToken: surveyA.publicToken }) });
       expect(res.status).toBe(200);
       const data = await res.json();
 
@@ -555,7 +555,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         }),
       });
 
-      const res = await publicSurveySubmitPOST(req, { params: { publicToken: surveyA.publicToken } });
+      const res = await publicSurveySubmitPOST(req, { params: Promise.resolve({ publicToken: surveyA.publicToken }) });
       expect(res.status).toBe(200);
       const data = await res.json();
 
@@ -577,7 +577,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         `http://localhost:3000/api/public/surveys/${surveyA.publicToken}/draft/${draftResponseB.id}`
       );
       const res = await publicSurveyDraftGET(req, {
-        params: { publicToken: surveyA.publicToken, responseId: draftResponseB.id },
+        params: Promise.resolve({ publicToken: surveyA.publicToken, responseId: draftResponseB.id }),
       });
       expect(res.status).toBe(404);
     });
@@ -591,7 +591,7 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
         }),
       });
 
-      const res = await publicSurveySubmitPOST(req, { params: { publicToken: surveyA.publicToken } });
+      const res = await publicSurveySubmitPOST(req, { params: Promise.resolve({ publicToken: surveyA.publicToken }) });
       expect(res.status).toBeGreaterThanOrEqual(400);
 
       // 驗證他人草稿 B 未被污染為 COMPLETED

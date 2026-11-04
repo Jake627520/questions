@@ -9,10 +9,10 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { publicToken: string; responseId: string } }
+  { params }: { params: Promise<{ publicToken: string; responseId: string }> }
 ) {
   try {
-    const { publicToken, responseId } = params;
+    const { publicToken, responseId } = await params;
 
     const survey = await db.survey.findUnique({
       where: { publicToken },

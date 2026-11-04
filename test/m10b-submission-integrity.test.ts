@@ -175,7 +175,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
         { answers: [{ questionCode: "Q1", value: "opt_a" }] },
         { "Idempotency-Key": idempotencyKey }
       );
-      const res1 = await publicSubmitPOST(req1, { params: { publicToken: pToken } });
+      const res1 = await publicSubmitPOST(req1, { params: Promise.resolve({ publicToken: pToken }) });
       expect(res1.status).toBe(200);
       expect(res1.headers.get("Idempotent-Replayed")).toBe("false");
       const json1 = await res1.json();
@@ -188,7 +188,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
         { answers: [{ questionCode: "Q1", value: "opt_a" }] },
         { "Idempotency-Key": idempotencyKey }
       );
-      const res2 = await publicSubmitPOST(req2, { params: { publicToken: pToken } });
+      const res2 = await publicSubmitPOST(req2, { params: Promise.resolve({ publicToken: pToken }) });
       expect(res2.status).toBe(200);
       expect(res2.headers.get("Idempotent-Replayed")).toBe("true");
       const json2 = await res2.json();
@@ -235,7 +235,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
         { answers: [{ questionCode: "Q1", value: "opt_a" }] },
         { "Idempotency-Key": idempotencyKey }
       );
-      const res1 = await publicSubmitPOST(req1, { params: { publicToken: pToken } });
+      const res1 = await publicSubmitPOST(req1, { params: Promise.resolve({ publicToken: pToken }) });
       expect(res1.status).toBe(200);
 
       // 篡改作答內容為 opt_b 並重用相同 key -> 409 Conflict
@@ -244,7 +244,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
         { answers: [{ questionCode: "Q1", value: "opt_b" }] },
         { "Idempotency-Key": idempotencyKey }
       );
-      const res2 = await publicSubmitPOST(req2, { params: { publicToken: pToken } });
+      const res2 = await publicSubmitPOST(req2, { params: Promise.resolve({ publicToken: pToken }) });
       expect(res2.status).toBe(409);
       const json2 = await res2.json();
       expect(json2.error).toBe("IDEMPOTENCY_KEY_REUSE");
@@ -307,7 +307,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
           { answers: [{ questionCode: "Q1", value: "ans_a" }] },
           { "Idempotency-Key": sharedKey }
         ),
-        { params: { publicToken: pTokenA } }
+        { params: Promise.resolve({ publicToken: pTokenA }) }
       );
       expect(resA.status).toBe(200);
 
@@ -318,7 +318,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
           { answers: [{ questionCode: "Q1", value: "ans_b" }] },
           { "Idempotency-Key": sharedKey }
         ),
-        { params: { publicToken: pTokenB } }
+        { params: Promise.resolve({ publicToken: pTokenB }) }
       );
       expect(resB.status).toBe(200);
 
@@ -359,7 +359,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
           `http://localhost/api/public/surveys/${pToken}/submit`,
           { answers: [{ questionCode: "Q1", value: "opt" }] }
         ),
-        { params: { publicToken: pToken } }
+        { params: Promise.resolve({ publicToken: pToken }) }
       );
       expect(res1.status).toBe(200);
       const resp1Id = (await res1.json()).responseId;
@@ -370,7 +370,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
           `http://localhost/api/public/surveys/${pToken}/submit`,
           { answers: [{ questionCode: "Q1", value: "opt" }] }
         ),
-        { params: { publicToken: pToken } }
+        { params: Promise.resolve({ publicToken: pToken }) }
       );
       expect(res2.status).toBe(200);
 
@@ -381,7 +381,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
         { method: "PATCH", body: { status: "EXCLUDED", reason: "作弊洗票" } }
       );
       const patchRes = await responseStatusPATCH(patchReq, {
-        params: { id: survey.id, responseId: resp1Id },
+        params: Promise.resolve({ id: survey.id, responseId: resp1Id }),
       });
       expect(patchRes.status).toBe(200);
 
@@ -391,7 +391,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
           `http://localhost/api/public/surveys/${pToken}/submit`,
           { answers: [{ questionCode: "Q1", value: "opt" }] }
         ),
-        { params: { publicToken: pToken } }
+        { params: Promise.resolve({ publicToken: pToken }) }
       );
       expect(res3.status).toBe(403);
       expect((await res3.json()).error).toBe("QUOTA_EXCEEDED");
@@ -418,7 +418,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
         { method: "PATCH", body: { status: "EXCLUDED", reason: "攻擊" } }
       );
       const idorRes = await responseStatusPATCH(idorReq, {
-        params: { id: survey.id, responseId: resp.id },
+        params: Promise.resolve({ id: survey.id, responseId: resp.id }),
       });
       expect(idorRes.status).toBe(403);
     });
@@ -490,7 +490,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
 
       // 驗證 Stats 端點
       const statsReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/stats`, tokenEditorA);
-      const statsRes = await statsGET(statsReq, { params: { id: survey.id } });
+      const statsRes = await statsGET(statsReq, { params: Promise.resolve({ id: survey.id }) });
       expect(statsRes.status).toBe(200);
       const statsJson = await statsRes.json();
       expect(statsJson.summary.totalResponses).toBe(5); // 嚴格等於 5
@@ -498,7 +498,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
 
       // 驗證 Questions Analytics 端點
       const qReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/analytics/questions`, tokenEditorA);
-      const qRes = await questionsAnalyticsGET(qReq, { params: { id: survey.id } });
+      const qRes = await questionsAnalyticsGET(qReq, { params: Promise.resolve({ id: survey.id }) });
       const qJson = await qRes.json();
       expect(qJson.summary.totalResponses).toBe(5);
     });
@@ -536,7 +536,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
           { answers: [{ questionCode: "Q1", value: "opt" }] },
           { "Idempotency-Key": sharedKey }
         );
-        return publicSubmitPOST(req, { params: { publicToken: pToken } });
+        return publicSubmitPOST(req, { params: Promise.resolve({ publicToken: pToken }) });
       });
 
       const responses = await Promise.all(requests);
@@ -586,7 +586,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
           { answers: [{ questionCode: "Q1", value: `payload_variation_${idx}` }] },
           { "Idempotency-Key": sharedConflictKey }
         );
-        return publicSubmitPOST(req, { params: { publicToken: pToken } });
+        return publicSubmitPOST(req, { params: Promise.resolve({ publicToken: pToken }) });
       });
 
       const responses = await Promise.all(requests);
@@ -661,7 +661,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
         { answers: [] }, // 漏填必填題
         { "Idempotency-Key": failureKey }
       );
-      const resFail = await publicSubmitPOST(reqFail, { params: { publicToken: pToken } });
+      const resFail = await publicSubmitPOST(reqFail, { params: Promise.resolve({ publicToken: pToken }) });
       expect(resFail.status).toBe(422);
 
       // 2. 修正為正確作答並重送相同 Key -> 成功 200 (未被消耗鎖死)
@@ -670,7 +670,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
         { answers: [{ questionCode: "Q_REQ", value: "opt_a" }] },
         { "Idempotency-Key": failureKey }
       );
-      const resSuccess = await publicSubmitPOST(reqSuccess, { params: { publicToken: pToken } });
+      const resSuccess = await publicSubmitPOST(reqSuccess, { params: Promise.resolve({ publicToken: pToken }) });
       expect(resSuccess.status).toBe(200);
       expect((await resSuccess.json()).replayed).toBe(false);
     });
@@ -784,14 +784,14 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
 
       // 1. 驗證 Stats 端點
       const statsReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/stats`, tokenEditorA);
-      const statsRes = await statsGET(statsReq, { params: { id: survey.id } });
+      const statsRes = await statsGET(statsReq, { params: Promise.resolve({ id: survey.id }) });
       const statsJson = await statsRes.json();
       expect(statsJson.summary.totalResponses).toBe(100); // 嚴格等於 100，零污染
       expect(statsJson.summary.avgScore).toBe(100);
 
       // 2. 驗證 Question Analytics 端點
       const qReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/analytics/questions`, tokenEditorA);
-      const qRes = await questionsAnalyticsGET(qReq, { params: { id: survey.id } });
+      const qRes = await questionsAnalyticsGET(qReq, { params: Promise.resolve({ id: survey.id }) });
       const qJson = await qRes.json();
       expect(qJson.summary.totalResponses).toBe(100);
 
@@ -800,7 +800,7 @@ describe("Phase M10-B: Response Collection & Submission Integrity (Hardened Cont
         `http://localhost/api/surveys/${survey.id}/analytics/crosstab?rowQuestionId=${q1!.id}&colQuestionId=${q2!.id}`,
         tokenEditorA
       );
-      const crossRes = await crosstabGET(crossReq, { params: { id: survey.id } });
+      const crossRes = await crosstabGET(crossReq, { params: Promise.resolve({ id: survey.id }) });
       const crossJson = await crossRes.json();
       expect(crossJson.totalSurveyResponses).toBe(100);
       expect(crossJson.result.grandTotal).toBe(100);

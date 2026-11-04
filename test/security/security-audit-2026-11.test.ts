@@ -28,6 +28,7 @@ describe("Security audit 2026-11 regression", () => {
   let excluded: any;
   let inProgress: any;
   const tokens: Record<string, string> = {};
+  const userIds: Record<string, string> = {};
 
   async function cleanup() {
     const orgs = [orgId, otherOrgId];
@@ -59,9 +60,9 @@ describe("Security audit 2026-11 regression", () => {
       ["admin", orgId, Role.ADMIN],
       ["editor", orgId, Role.EDITOR],
       ["viewer", orgId, Role.VIEWER],
+      ["viewer2", orgId, Role.VIEWER],
       ["outsider", otherOrgId, Role.OWNER],
     ];
-    const ids: Record<string, string> = {};
     for (const [name, org, role] of users) {
       const u = await db.user.create({
         data: {
@@ -71,7 +72,7 @@ describe("Security audit 2026-11 regression", () => {
           memberships: { create: { organizationId: org, role } },
         },
       });
-      ids[name] = u.id;
+      userIds[name] = u.id;
       tokens[name] = (await createSession(u.id)).token;
     }
 
@@ -79,7 +80,7 @@ describe("Security audit 2026-11 regression", () => {
       data: {
         title: "Sec 2611 survey",
         organizationId: orgId,
-        createdById: ids.owner,
+        createdById: userIds.owner,
         status: SurveyStatus.PUBLISHED,
         publicToken: generatePublicToken(),
         questions: {
@@ -137,7 +138,7 @@ describe("Security audit 2026-11 regression", () => {
     it("VIEWER cannot clear a COMPLETED response via draft (403)", async () => {
       const res = await memberDraftPOST(
         jsonReq(`http://localhost/api/surveys/${survey.id}/draft`, "POST", { responseId: completed.id, answers: [] }, tokens.viewer),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(res.status).toBe(403);
       expect(await answerCount(completed.id)).toBe(1);
@@ -146,7 +147,7 @@ describe("Security audit 2026-11 regression", () => {
     it("VIEWER cannot resurrect an EXCLUDED response via submit (403)", async () => {
       const res = await memberSubmitPOST(
         jsonReq(`http://localhost/api/surveys/${survey.id}/submit`, "POST", { responseId: excluded.id, answers: [] }, tokens.viewer),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(res.status).toBe(403);
       expect(await statusOf(excluded.id)).toBe(ResponseStatus.EXCLUDED);
@@ -155,7 +156,7 @@ describe("Security audit 2026-11 regression", () => {
     it("EDITOR cannot overwrite a COMPLETED response via draft (409)", async () => {
       const res = await memberDraftPOST(
         jsonReq(`http://localhost/api/surveys/${survey.id}/draft`, "POST", { responseId: completed.id, answers: [] }, tokens.editor),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(res.status).toBe(409);
       expect(await answerCount(completed.id)).toBe(1);
@@ -164,7 +165,7 @@ describe("Security audit 2026-11 regression", () => {
     it("EDITOR cannot resubmit an EXCLUDED response (409)", async () => {
       const res = await memberSubmitPOST(
         jsonReq(`http://localhost/api/surveys/${survey.id}/submit`, "POST", { responseId: excluded.id, answers: [] }, tokens.editor),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(res.status).toBe(409);
       expect(await statusOf(excluded.id)).toBe(ResponseStatus.EXCLUDED);
@@ -173,12 +174,12 @@ describe("Security audit 2026-11 regression", () => {
     it("EDITOR can still continue and submit an IN_PROGRESS draft", async () => {
       const draftRes = await memberDraftPOST(
         jsonReq(`http://localhost/api/surveys/${survey.id}/draft`, "POST", { responseId: inProgress.id, answers: [] }, tokens.editor),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(draftRes.status).toBe(200);
       const submitRes = await memberSubmitPOST(
         jsonReq(`http://localhost/api/surveys/${survey.id}/submit`, "POST", { responseId: inProgress.id, answers: [] }, tokens.editor),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(submitRes.status).toBe(200);
       expect(await statusOf(inProgress.id)).toBe(ResponseStatus.COMPLETED);
@@ -187,29 +188,149 @@ describe("Security audit 2026-11 regression", () => {
     it("VIEWER can still start a new response without responseId", async () => {
       const res = await memberDraftPOST(
         jsonReq(`http://localhost/api/surveys/${survey.id}/draft`, "POST", { answers: [] }, tokens.viewer),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(res.status).toBe(200);
+      const body = await res.json();
+      const created = await db.response.findUnique({ where: { id: body.responseId } });
+      expect(created?.createdById).toBe(userIds.viewer);
+      expect(created?.status).toBe(ResponseStatus.IN_PROGRESS);
+    });
+
+    it("VIEWER who created an IN_PROGRESS response can keep saving and then submit it", async () => {
+      const first = await memberDraftPOST(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/draft`,
+          "POST",
+          { answers: [{ questionCode: "Q1", rawValue: "第一次" }] },
+          tokens.viewer
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+      expect(first.status).toBe(200);
+      const { responseId } = await first.json();
+
+      const second = await memberDraftPOST(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/draft`,
+          "POST",
+          { responseId, answers: [{ questionCode: "Q1", rawValue: "第二次" }] },
+          tokens.viewer
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+      expect(second.status).toBe(200);
+      const saved = await db.answer.findMany({ where: { responseId } });
+      expect(saved).toHaveLength(1);
+      expect(saved[0].rawValue).toBe(JSON.stringify("第二次"));
+
+      const submitted = await memberSubmitPOST(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/submit`,
+          "POST",
+          { responseId, answers: [{ questionCode: "Q1", rawValue: "送出" }] },
+          tokens.viewer
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+      expect(submitted.status).toBe(200);
+      expect(await statusOf(responseId)).toBe(ResponseStatus.COMPLETED);
+
+      const again = await memberDraftPOST(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/draft`,
+          "POST",
+          { responseId, answers: [] },
+          tokens.viewer
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+      expect(again.status).toBe(409);
+      expect(await statusOf(responseId)).toBe(ResponseStatus.COMPLETED);
+    });
+
+    it("another VIEWER cannot draft or submit someone else's IN_PROGRESS response", async () => {
+      const first = await memberDraftPOST(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/draft`,
+          "POST",
+          { answers: [{ questionCode: "Q1", rawValue: "本人的草稿" }] },
+          tokens.viewer
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+      expect(first.status).toBe(200);
+      const { responseId } = await first.json();
+
+      const draft = await memberDraftPOST(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/draft`,
+          "POST",
+          { responseId, answers: [{ questionCode: "Q1", rawValue: "被竄改" }] },
+          tokens.viewer2
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+      expect(draft.status).toBe(403);
+      const submit = await memberSubmitPOST(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/submit`,
+          "POST",
+          { responseId, answers: [{ questionCode: "Q1", rawValue: "被竄改" }] },
+          tokens.viewer2
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+      expect(submit.status).toBe(403);
+      expect(await statusOf(responseId)).toBe(ResponseStatus.IN_PROGRESS);
+      const saved = await db.answer.findMany({ where: { responseId } });
+      expect(saved).toHaveLength(1);
+      expect(saved[0].rawValue).toBe(JSON.stringify("本人的草稿"));
+    });
+
+    it("VIEWER cannot resume an IN_PROGRESS response they did not create", async () => {
+      const res = await memberDraftPOST(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/draft`,
+          "POST",
+          { responseId: inProgress.id, answers: [] },
+          tokens.viewer
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+      expect(res.status).toBe(403);
+      expect(await answerCount(inProgress.id)).toBe(1);
+      const submit = await memberSubmitPOST(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/submit`,
+          "POST",
+          { responseId: inProgress.id, answers: [] },
+          tokens.viewer
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+      expect(submit.status).toBe(403);
+      expect(await statusOf(inProgress.id)).toBe(ResponseStatus.IN_PROGRESS);
     });
   });
 
   // [Medium] GET /api/surveys/[id] 非 management 模式
   describe("survey detail GET requires membership and hides internal fields", () => {
     it("anonymous GET is rejected (401)", async () => {
-      const res = await surveyGET(getReq(`http://localhost/api/surveys/${survey.id}`), { params: { id: survey.id } });
+      const res = await surveyGET(getReq(`http://localhost/api/surveys/${survey.id}`), { params: Promise.resolve({ id: survey.id }) });
       expect(res.status).toBe(401);
     });
 
     it("non-member GET is rejected (403)", async () => {
       const res = await surveyGET(getReq(`http://localhost/api/surveys/${survey.id}`, tokens.outsider), {
-        params: { id: survey.id },
+        params: Promise.resolve({ id: survey.id }),
       });
       expect(res.status).toBe(403);
     });
 
     it("member fill view omits creator email, publicToken and version tree", async () => {
       const res = await surveyGET(getReq(`http://localhost/api/surveys/${survey.id}`, tokens.viewer), {
-        params: { id: survey.id },
+        params: Promise.resolve({ id: survey.id }),
       });
       expect(res.status).toBe(200);
       const { survey: s } = await res.json();
@@ -232,7 +353,7 @@ describe("Security audit 2026-11 regression", () => {
     ])("anonymous GET of %s response is rejected (401)", async (_label, pick) => {
       const r = pick();
       const res = await responseGET(getReq(`http://localhost/api/surveys/${survey.id}/responses/${r.id}`), {
-        params: { id: survey.id, responseId: r.id },
+        params: Promise.resolve({ id: survey.id, responseId: r.id }),
       });
       expect(res.status).toBe(401);
     });
@@ -244,7 +365,7 @@ describe("Security audit 2026-11 regression", () => {
       const r = pick();
       const res = await responseDELETE(
         getReq(`http://localhost/api/surveys/${survey.id}/responses/${r.id}`, undefined, "DELETE"),
-        { params: { id: survey.id, responseId: r.id } }
+        { params: Promise.resolve({ id: survey.id, responseId: r.id }) }
       );
       expect(res.status).toBe(401);
       expect(await statusOf(r.id)).toBeDefined();
@@ -253,7 +374,7 @@ describe("Security audit 2026-11 regression", () => {
     it("non-member GET of IN_PROGRESS response is rejected (403)", async () => {
       const res = await responseGET(
         getReq(`http://localhost/api/surveys/${survey.id}/responses/${inProgress.id}`, tokens.outsider),
-        { params: { id: survey.id, responseId: inProgress.id } }
+        { params: Promise.resolve({ id: survey.id, responseId: inProgress.id }) }
       );
       expect(res.status).toBe(403);
     });
@@ -261,7 +382,7 @@ describe("Security audit 2026-11 regression", () => {
     it("EDITOR cannot delete an EXCLUDED response (needs MANAGERS)", async () => {
       const res = await responseDELETE(
         getReq(`http://localhost/api/surveys/${survey.id}/responses/${excluded.id}?force=true`, tokens.editor, "DELETE"),
-        { params: { id: survey.id, responseId: excluded.id } }
+        { params: Promise.resolve({ id: survey.id, responseId: excluded.id }) }
       );
       expect(res.status).toBe(403);
       expect(await statusOf(excluded.id)).toBe(ResponseStatus.EXCLUDED);
@@ -270,11 +391,11 @@ describe("Security audit 2026-11 regression", () => {
     it("VIEWER cannot delete an IN_PROGRESS draft; EDITOR can", async () => {
       const url = `http://localhost/api/surveys/${survey.id}/responses/${inProgress.id}`;
       const viewerRes = await responseDELETE(getReq(url, tokens.viewer, "DELETE"), {
-        params: { id: survey.id, responseId: inProgress.id },
+        params: Promise.resolve({ id: survey.id, responseId: inProgress.id }),
       });
       expect(viewerRes.status).toBe(403);
       const editorRes = await responseDELETE(getReq(url, tokens.editor, "DELETE"), {
-        params: { id: survey.id, responseId: inProgress.id },
+        params: Promise.resolve({ id: survey.id, responseId: inProgress.id }),
       });
       expect(editorRes.status).toBe(200);
     });
@@ -282,7 +403,7 @@ describe("Security audit 2026-11 regression", () => {
     it("member can still load an IN_PROGRESS draft", async () => {
       const res = await responseGET(
         getReq(`http://localhost/api/surveys/${survey.id}/responses/${inProgress.id}`, tokens.viewer),
-        { params: { id: survey.id, responseId: inProgress.id } }
+        { params: Promise.resolve({ id: survey.id, responseId: inProgress.id }) }
       );
       expect(res.status).toBe(200);
     });
@@ -293,7 +414,7 @@ describe("Security audit 2026-11 regression", () => {
     it("public submit cannot resurrect an EXCLUDED response (409)", async () => {
       const res = await publicSubmitPOST(
         jsonReq(`http://localhost/api/public/surveys/${survey.publicToken}/submit`, "POST", { responseId: excluded.id, answers: [] }),
-        { params: { publicToken: survey.publicToken } }
+        { params: Promise.resolve({ publicToken: survey.publicToken }) }
       );
       expect(res.status).toBe(409);
       const after = await db.response.findUnique({ where: { id: excluded.id } });
@@ -304,7 +425,7 @@ describe("Security audit 2026-11 regression", () => {
     it("public draft cannot reopen and clear a COMPLETED response (409)", async () => {
       const res = await publicDraftPOST(
         jsonReq(`http://localhost/api/public/surveys/${survey.publicToken}/draft`, "POST", { responseId: completed.id, answers: [] }),
-        { params: { publicToken: survey.publicToken } }
+        { params: Promise.resolve({ publicToken: survey.publicToken }) }
       );
       expect(res.status).toBe(409);
       expect(await statusOf(completed.id)).toBe(ResponseStatus.COMPLETED);
@@ -314,12 +435,12 @@ describe("Security audit 2026-11 regression", () => {
     it("public draft and submit still work for an IN_PROGRESS response", async () => {
       const draftRes = await publicDraftPOST(
         jsonReq(`http://localhost/api/public/surveys/${survey.publicToken}/draft`, "POST", { responseId: inProgress.id, answers: [] }),
-        { params: { publicToken: survey.publicToken } }
+        { params: Promise.resolve({ publicToken: survey.publicToken }) }
       );
       expect(draftRes.status).toBe(200);
       const submitRes = await publicSubmitPOST(
         jsonReq(`http://localhost/api/public/surveys/${survey.publicToken}/submit`, "POST", { responseId: inProgress.id, answers: [] }),
-        { params: { publicToken: survey.publicToken } }
+        { params: Promise.resolve({ publicToken: survey.publicToken }) }
       );
       expect(submitRes.status).toBe(200);
       expect(await statusOf(inProgress.id)).toBe(ResponseStatus.COMPLETED);
@@ -346,7 +467,7 @@ describe("Security audit 2026-11 regression", () => {
           jsonReq(`http://localhost/api/public/surveys/${encodeURIComponent(token)}/submit`, "POST", { answers: [] }, undefined, {
             "x-forwarded-for": ip,
           }),
-          { params: { publicToken: token } }
+          { params: Promise.resolve({ publicToken: token }) }
         );
       for (let i = 0; i < 10; i++) {
         await send(survey.publicToken);

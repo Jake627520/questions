@@ -17,10 +17,10 @@ import {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const survey = await db.survey.findUnique({
       where: { id },
       include: {
@@ -128,7 +128,7 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -136,7 +136,7 @@ export async function PATCH(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
 
     const existingSurvey = await db.survey.findUnique({
@@ -254,7 +254,7 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -262,7 +262,7 @@ export async function DELETE(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const existingSurvey = await db.survey.findUnique({
       where: { id },
       include: {

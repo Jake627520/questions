@@ -299,17 +299,17 @@ describe("Phase M11: Production Readiness & Operational Governance Audit", () =>
 
       // 1. 過期產物 -> 410 Gone
       const dlReq1 = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/downloads/${expiredExport.id}`, tokenOwnerA);
-      const dlRes1 = await reportDownloadGET(dlReq1, { params: { id: survey.id, exportId: expiredExport.id } });
+      const dlRes1 = await reportDownloadGET(dlReq1, { params: Promise.resolve({ id: survey.id, exportId: expiredExport.id }) });
       expect(dlRes1.status).toBe(410);
 
       // 2. Viewer 嘗試下載 -> 403
       const dlReq2 = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/downloads/${expiredExport.id}`, tokenViewerA);
-      const dlRes2 = await reportDownloadGET(dlReq2, { params: { id: survey.id, exportId: expiredExport.id } });
+      const dlRes2 = await reportDownloadGET(dlReq2, { params: Promise.resolve({ id: survey.id, exportId: expiredExport.id }) });
       expect(dlRes2.status).toBe(403);
 
       // 3. 跨租戶 Tenant B 嘗試下載 -> 403
       const dlReq3 = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/downloads/${expiredExport.id}`, tokenTenantB);
-      const dlRes3 = await reportDownloadGET(dlReq3, { params: { id: survey.id, exportId: expiredExport.id } });
+      const dlRes3 = await reportDownloadGET(dlReq3, { params: Promise.resolve({ id: survey.id, exportId: expiredExport.id }) });
       expect(dlRes3.status).toBe(403);
     });
 

@@ -282,25 +282,25 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
         method: "PATCH",
         body: JSON.stringify({ title: "竄改標題" }),
       });
-      const res = await surveyPATCH(req, { params: { id: testSurveyId } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: testSurveyId }) });
       expect(res.status).toBe(401);
     });
 
     it("未登入呼叫 GET /api/surveys/:id/responses 應回傳 401", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${testSurveyId}/responses`);
-      const res = await responsesGET(req, { params: { id: testSurveyId } });
+      const res = await responsesGET(req, { params: Promise.resolve({ id: testSurveyId }) });
       expect(res.status).toBe(401);
     });
 
     it("未登入呼叫 GET /api/surveys/:id/stats 應回傳 401", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${testSurveyId}/stats`);
-      const res = await statsGET(req, { params: { id: testSurveyId } });
+      const res = await statsGET(req, { params: Promise.resolve({ id: testSurveyId }) });
       expect(res.status).toBe(401);
     });
 
     it("未登入呼叫 GET /api/surveys/:id/export 應回傳 401", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${testSurveyId}/export`);
-      const res = await exportGET(req, { params: { id: testSurveyId } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: testSurveyId }) });
       expect(res.status).toBe(401);
     });
 
@@ -308,7 +308,7 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${testSurveyId}/clone-version`, {
         method: "POST",
       });
-      const res = await clonePOST(req, { params: { id: testSurveyId } });
+      const res = await clonePOST(req, { params: Promise.resolve({ id: testSurveyId }) });
       expect(res.status).toBe(401);
     });
   });
@@ -321,7 +321,7 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
     // 匿名填答一律走 /api/public/surveys/[publicToken]。
     it("未登入讀取 GET /api/surveys/:id 應被拒絕 (401 Unauthorized)", async () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${testSurveyId}`);
-      const res = await surveyGET(req, { params: { id: testSurveyId } });
+      const res = await surveyGET(req, { params: Promise.resolve({ id: testSurveyId }) });
       expect(res.status).toBe(401);
     });
 
@@ -334,7 +334,7 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
           answers: [{ questionCode: "Q1", rawValue: "sat" }],
         }),
       });
-      const res = await submitPOST(req, { params: { id: testSurveyId } });
+      const res = await submitPOST(req, { params: Promise.resolve({ id: testSurveyId }) });
       expect(res.status).toBe(401);
     });
 
@@ -345,7 +345,7 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
           answers: [{ questionCode: "Q1", rawValue: "unsat" }],
         }),
       });
-      const res = await draftPOST(req, { params: { id: testSurveyId } });
+      const res = await draftPOST(req, { params: Promise.resolve({ id: testSurveyId }) });
       expect(res.status).toBe(401);
     });
 

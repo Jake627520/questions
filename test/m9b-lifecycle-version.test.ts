@@ -217,7 +217,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenEditorA,
         { method: "PATCH", body: { status: "PUBLISHED" } }
       );
-      const res = await surveyPATCH(req, { params: { id: surveyDraftA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyDraftA.id }) });
       expect(res.status).toBe(200);
 
       const check = await db.survey.findUnique({ where: { id: surveyDraftA.id } });
@@ -230,7 +230,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenEditorA,
         { method: "PATCH", body: { status: "PUBLISHED" } }
       );
-      const res = await surveyPATCH(req, { params: { id: surveyOrgB.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyOrgB.id }) });
       expect(res.status).toBe(403);
 
       const check = await db.survey.findUnique({ where: { id: surveyOrgB.id } });
@@ -243,7 +243,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenEditorA,
         { method: "PATCH", body: { status: "CLOSED" } }
       );
-      const res = await surveyPATCH(req, { params: { id: surveyPublishedA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyPublishedA.id }) });
       expect(res.status).toBe(200);
 
       const check = await db.survey.findUnique({ where: { id: surveyPublishedA.id } });
@@ -256,7 +256,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenOwnerA,
         { method: "PATCH", body: { status: "CLOSED" } }
       );
-      const res = await surveyPATCH(req, { params: { id: surveyOrgB.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyOrgB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -266,7 +266,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenEditorA,
         { method: "PATCH", body: { status: "PUBLISHED" } }
       );
-      const res = await surveyPATCH(req, { params: { id: surveyClosedA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyClosedA.id }) });
       expect(res.status).toBe(200);
 
       const check = await db.survey.findUnique({ where: { id: surveyClosedA.id } });
@@ -279,7 +279,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenAdminA,
         { method: "PATCH", body: { status: "PUBLISHED" } }
       );
-      const res = await surveyPATCH(req, { params: { id: surveyOrgB.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyOrgB.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -292,7 +292,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenViewerA,
         { method: "PATCH", body: { status: "PUBLISHED" } }
       );
-      const resPub = await surveyPATCH(reqPub, { params: { id: surveyDraftA.id } });
+      const resPub = await surveyPATCH(reqPub, { params: Promise.resolve({ id: surveyDraftA.id }) });
       expect(resPub.status).toBe(403);
 
       // Try Close
@@ -301,7 +301,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenViewerA,
         { method: "PATCH", body: { status: "CLOSED" } }
       );
-      const resClose = await surveyPATCH(reqClose, { params: { id: surveyPublishedA.id } });
+      const resClose = await surveyPATCH(reqClose, { params: Promise.resolve({ id: surveyPublishedA.id }) });
       expect(resClose.status).toBe(403);
 
       // Try Reopen
@@ -310,7 +310,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenViewerA,
         { method: "PATCH", body: { status: "PUBLISHED" } }
       );
-      const resReopen = await surveyPATCH(reqReopen, { params: { id: surveyClosedA.id } });
+      const resReopen = await surveyPATCH(reqReopen, { params: Promise.resolve({ id: surveyClosedA.id }) });
       expect(resReopen.status).toBe(403);
     });
 
@@ -320,7 +320,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenEditorA,
         { method: "PATCH", body: { status: "PUBLISHED" } }
       );
-      const res = await surveyPATCH(req, { params: { id: surveyDraftA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyDraftA.id }) });
       expect(res.status).toBe(200);
     });
 
@@ -330,7 +330,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenAdminA,
         { method: "PATCH", body: { status: "CLOSED" } }
       );
-      const resAdmin = await surveyPATCH(reqAdmin, { params: { id: surveyPublishedA.id } });
+      const resAdmin = await surveyPATCH(reqAdmin, { params: Promise.resolve({ id: surveyPublishedA.id }) });
       expect(resAdmin.status).toBe(200);
 
       const reqOwner = makeAuthReq(
@@ -338,7 +338,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenOwnerA,
         { method: "PATCH", body: { status: "PUBLISHED" } }
       );
-      const resOwner = await surveyPATCH(reqOwner, { params: { id: surveyPublishedA.id } });
+      const resOwner = await surveyPATCH(reqOwner, { params: Promise.resolve({ id: surveyPublishedA.id }) });
       expect(resOwner.status).toBe(200);
     });
   });
@@ -350,7 +350,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenOwnerA,
         { method: "PATCH", body: { questions: [{ title: "Hacked question" }] } }
       );
-      const res = await surveyPATCH(req, { params: { id: surveyPublishedA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyPublishedA.id }) });
       expect(res.status).toBe(403);
       const data = await res.json();
       expect(data.error).toContain("Published Lock");
@@ -368,7 +368,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenAdminA,
         { method: "POST" }
       );
-      const resClone1 = await clonePOST(reqClone1, { params: { id: surveyPublishedA.id } });
+      const resClone1 = await clonePOST(reqClone1, { params: Promise.resolve({ id: surveyPublishedA.id }) });
       const data1 = await resClone1.json();
       clonedV2 = data1.survey;
 
@@ -377,7 +377,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         tokenAdminA,
         { method: "POST" }
       );
-      const resClone2 = await clonePOST(reqClone2, { params: { id: clonedV2.id } });
+      const resClone2 = await clonePOST(reqClone2, { params: Promise.resolve({ id: clonedV2.id }) });
       const data2 = await resClone2.json();
       clonedV3 = data2.survey;
     });
@@ -395,7 +395,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         `http://localhost:3000/api/surveys/${clonedV3.id}/lineage`,
         tokenEditorA
       );
-      const res = await lineageGET(req, { params: { id: clonedV3.id } });
+      const res = await lineageGET(req, { params: Promise.resolve({ id: clonedV3.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -417,7 +417,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         `http://localhost:3000/api/surveys/${clonedV2.id}/lineage`,
         tokenViewerA
       );
-      const res = await lineageGET(req, { params: { id: clonedV2.id } });
+      const res = await lineageGET(req, { params: Promise.resolve({ id: clonedV2.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -432,7 +432,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         `http://localhost:3000/api/surveys/${surveyOrgB.id}/lineage`,
         tokenOwnerA
       );
-      const res = await lineageGET(req, { params: { id: surveyOrgB.id } });
+      const res = await lineageGET(req, { params: Promise.resolve({ id: surveyOrgB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -440,7 +440,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
       const req = new NextRequest(
         `http://localhost:3000/api/surveys/${surveyPublishedA.id}/lineage`
       );
-      const res = await lineageGET(req, { params: { id: surveyPublishedA.id } });
+      const res = await lineageGET(req, { params: Promise.resolve({ id: surveyPublishedA.id }) });
       expect(res.status).toBe(401);
     });
 
@@ -449,7 +449,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
         `http://localhost:3000/api/surveys/${clonedV2.id}?mode=management`,
         tokenAdminA
       );
-      const res = await surveyGET(req, { params: { id: clonedV2.id } });
+      const res = await surveyGET(req, { params: Promise.resolve({ id: clonedV2.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -469,7 +469,7 @@ describe("Phase M9-B: Survey Lifecycle & Version Management Suite", () => {
           cookies: { survey_active_org: orgA.id },
         }
       );
-      const res = await surveyPATCH(req, { params: { id: surveyDraftA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyDraftA.id }) });
       expect(res.status).toBe(403);
     });
   });

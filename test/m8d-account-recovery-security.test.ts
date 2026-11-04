@@ -426,7 +426,7 @@ describe("Phase M8-D: Account Recovery & Security Hardening Suite", () => {
       });
 
       const req = new NextRequest(`http://localhost:3000/api/invitations/${rawToken}`);
-      const res = await invitationPreviewGET(req, { params: { token: rawToken } });
+      const res = await invitationPreviewGET(req, { params: Promise.resolve({ token: rawToken }) });
       expect(res.status).toBe(200);
       const data = await res.json();
 

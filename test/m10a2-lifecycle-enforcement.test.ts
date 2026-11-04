@@ -216,7 +216,7 @@ describe("Phase M10-A.2: Survey Lifecycle Enforcement & Concurrency Hardening Su
         method: "PATCH",
         body: { questions: [{ title: "試圖竄改題目" }] },
       });
-      const res = await surveyPATCH(req, { params: { id: survey.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: survey.id }) });
       expect(res.status).toBe(403);
       const json = await res.json();
       expect(json.error).toContain("Published Lock");
@@ -276,21 +276,21 @@ describe("Phase M10-A.2: Survey Lifecycle Enforcement & Concurrency Hardening Su
       const req1 = makePublicReq(`http://localhost/api/public/surveys/${pToken}/submit`, {
         answers: [{ questionCode: "Q1", value: "a" }],
       });
-      const res1 = await publicSubmitPOST(req1, { params: { publicToken: pToken } });
+      const res1 = await publicSubmitPOST(req1, { params: Promise.resolve({ publicToken: pToken }) });
       expect(res1.status).toBe(200);
 
       // 提交第 2 筆 -> 成功 (達上限)
       const req2 = makePublicReq(`http://localhost/api/public/surveys/${pToken}/submit`, {
         answers: [{ questionCode: "Q1", value: "a" }],
       });
-      const res2 = await publicSubmitPOST(req2, { params: { publicToken: pToken } });
+      const res2 = await publicSubmitPOST(req2, { params: Promise.resolve({ publicToken: pToken }) });
       expect(res2.status).toBe(200);
 
       // 提交第 3 筆 -> 403 QUOTA_EXCEEDED
       const req3 = makePublicReq(`http://localhost/api/public/surveys/${pToken}/submit`, {
         answers: [{ questionCode: "Q1", value: "a" }],
       });
-      const res3 = await publicSubmitPOST(req3, { params: { publicToken: pToken } });
+      const res3 = await publicSubmitPOST(req3, { params: Promise.resolve({ publicToken: pToken }) });
       expect(res3.status).toBe(403);
       expect((await res3.json()).error).toBe("QUOTA_EXCEEDED");
 
@@ -328,23 +328,23 @@ describe("Phase M10-A.2: Survey Lifecycle Enforcement & Concurrency Hardening Su
     it("OWNER / ADMIN / EDITOR 具備生命週期操作權限，VIEWER 與外部使用者均被 403 阻擋", async () => {
       // Viewer 嘗試發布 -> 403
       const reqViewer = makeAuthReq(`http://localhost/api/surveys/${testSurvey.id}/publish`, tokenViewerA);
-      expect((await publishPOST(reqViewer, { params: { id: testSurvey.id } })).status).toBe(403);
+      expect((await publishPOST(reqViewer, { params: Promise.resolve({ id: testSurvey.id }) })).status).toBe(403);
 
       // 外部組織使用者嘗試發布 -> 403
       const reqOther = makeAuthReq(`http://localhost/api/surveys/${testSurvey.id}/publish`, tokenUserB);
-      expect((await publishPOST(reqOther, { params: { id: testSurvey.id } })).status).toBe(403);
+      expect((await publishPOST(reqOther, { params: Promise.resolve({ id: testSurvey.id }) })).status).toBe(403);
 
       // Editor 發布 -> 200
       const reqEditor = makeAuthReq(`http://localhost/api/surveys/${testSurvey.id}/publish`, tokenEditorA);
-      expect((await publishPOST(reqEditor, { params: { id: testSurvey.id } })).status).toBe(200);
+      expect((await publishPOST(reqEditor, { params: Promise.resolve({ id: testSurvey.id }) })).status).toBe(200);
 
       // Admin 關閉 -> 200
       const reqAdmin = makeAuthReq(`http://localhost/api/surveys/${testSurvey.id}/close`, tokenAdminA);
-      expect((await closePOST(reqAdmin, { params: { id: testSurvey.id } })).status).toBe(200);
+      expect((await closePOST(reqAdmin, { params: Promise.resolve({ id: testSurvey.id }) })).status).toBe(200);
 
       // Owner 歸檔 -> 200
       const reqOwner = makeAuthReq(`http://localhost/api/surveys/${testSurvey.id}/archive`, tokenOwnerA);
-      expect((await archivePOST(reqOwner, { params: { id: testSurvey.id } })).status).toBe(200);
+      expect((await archivePOST(reqOwner, { params: Promise.resolve({ id: testSurvey.id }) })).status).toBe(200);
     });
 
     it("物理刪除權限：僅 OWNER 與 ADMIN 可刪除無作答草稿問卷，EDITOR 無權物理刪除 (403)", async () => {
@@ -355,22 +355,22 @@ describe("Phase M10-A.2: Survey Lifecycle Enforcement & Concurrency Hardening Su
       const reqEditorDelete = makeAuthReq(`http://localhost/api/surveys/${draftSurvey.id}`, tokenEditorA, {
         method: "DELETE",
       });
-      expect((await surveyDELETE(reqEditorDelete, { params: { id: draftSurvey.id } })).status).toBe(403);
+      expect((await surveyDELETE(reqEditorDelete, { params: Promise.resolve({ id: draftSurvey.id }) })).status).toBe(403);
 
       const reqAdminDelete = makeAuthReq(`http://localhost/api/surveys/${draftSurvey.id}`, tokenAdminA, {
         method: "DELETE",
       });
-      expect((await surveyDELETE(reqAdminDelete, { params: { id: draftSurvey.id } })).status).toBe(200);
+      expect((await surveyDELETE(reqAdminDelete, { params: Promise.resolve({ id: draftSurvey.id }) })).status).toBe(200);
     });
   });
 
   describe("Gate G6: API Boundary & Fail-Closed Tests", () => {
     it("無效 ID 或無效 Public Token 應 Fail-Closed 回傳 400 或 404", async () => {
       const reqInvalidId = makeAuthReq("http://localhost/api/surveys/non-existent-id/publish", tokenOwnerA);
-      expect((await publishPOST(reqInvalidId, { params: { id: "non-existent-id" } })).status).toBe(404);
+      expect((await publishPOST(reqInvalidId, { params: Promise.resolve({ id: "non-existent-id" }) })).status).toBe(404);
 
       const reqEmptyToken = makePublicReq("http://localhost/api/public/surveys/%20/submit", { answers: [] });
-      expect((await publicSubmitPOST(reqEmptyToken, { params: { publicToken: " " } })).status).toBe(400);
+      expect((await publicSubmitPOST(reqEmptyToken, { params: Promise.resolve({ publicToken: " " }) })).status).toBe(400);
     });
   });
 
@@ -410,7 +410,7 @@ describe("Phase M10-A.2: Survey Lifecycle Enforcement & Concurrency Hardening Su
         const req = makePublicReq(`http://localhost/api/public/surveys/${pToken}/submit`, {
           answers: [{ questionCode: "Q1", value: "opt" }],
         });
-        return publicSubmitPOST(req, { params: { publicToken: pToken } });
+        return publicSubmitPOST(req, { params: Promise.resolve({ publicToken: pToken }) });
       });
 
       const responses = await Promise.all(requests);
@@ -454,7 +454,7 @@ describe("Phase M10-A.2: Survey Lifecycle Enforcement & Concurrency Hardening Su
       // 2. Publish
       const pubRes = await publishPOST(
         makeAuthReq(`http://localhost/api/surveys/${survey.id}/publish`, tokenEditorA),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(pubRes.status).toBe(200);
       const pubToken = (await pubRes.json()).survey.publicToken;
@@ -465,28 +465,28 @@ describe("Phase M10-A.2: Survey Lifecycle Enforcement & Concurrency Hardening Su
         makePublicReq(`http://localhost/api/public/surveys/${pubToken}/submit`, {
           answers: [{ questionCode: "Q1", value: "y" }],
         }),
-        { params: { publicToken: pubToken } }
+        { params: Promise.resolve({ publicToken: pubToken }) }
       );
       expect(submitRes.status).toBe(200);
 
       // 4. Close
       const closeRes = await closePOST(
         makeAuthReq(`http://localhost/api/surveys/${survey.id}/close`, tokenEditorA),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(closeRes.status).toBe(200);
 
       // 5. Archive
       const arcRes = await archivePOST(
         makeAuthReq(`http://localhost/api/surveys/${survey.id}/archive`, tokenEditorA),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(arcRes.status).toBe(200);
 
       // 6. Restore (已有作答 -> 還原至 CLOSED 保證安全)
       const resRes = await restorePOST(
         makeAuthReq(`http://localhost/api/surveys/${survey.id}/restore`, tokenEditorA),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(resRes.status).toBe(200);
       expect((await resRes.json()).survey.status).toBe(SurveyStatus.CLOSED);
@@ -494,7 +494,7 @@ describe("Phase M10-A.2: Survey Lifecycle Enforcement & Concurrency Hardening Su
       // 7. Duplicate
       const dupRes = await duplicatePOST(
         makeAuthReq(`http://localhost/api/surveys/${survey.id}/duplicate`, tokenEditorA),
-        { params: { id: survey.id } }
+        { params: Promise.resolve({ id: survey.id }) }
       );
       expect(dupRes.status).toBe(200);
       const dupJson = await dupRes.json();

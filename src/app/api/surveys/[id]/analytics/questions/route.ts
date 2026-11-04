@@ -25,7 +25,7 @@ import { analyzeSurveyQuestions } from "@/lib/analytics";
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -33,7 +33,7 @@ export async function GET(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
     const timeRange = searchParams.get("timeRange") || "all";
     const dateFromParam = searchParams.get("dateFrom");

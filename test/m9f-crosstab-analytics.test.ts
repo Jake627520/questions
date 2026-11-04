@@ -313,7 +313,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -331,7 +331,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       const salesRow = data.rows.find((r: any) => r.rowLabel === "Sales");
@@ -345,7 +345,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       const mktRow = data.rows.find((r: any) => r.rowLabel === "Marketing");
@@ -359,7 +359,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       const mktRow = data.rows.find((r: any) => r.rowLabel === "Marketing");
@@ -373,7 +373,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       const mktRow = data.rows.find((r: any) => r.rowLabel === "Marketing");
@@ -387,7 +387,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       const engRow = data.rows.find((r: any) => r.rowLabel === "Engineering");
@@ -406,7 +406,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       const engRow = data.rows.find((r: any) => r.rowLabel === "Engineering");
@@ -422,7 +422,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       const engRow = data.rows.find((r: any) => r.rowLabel === "Engineering");
@@ -438,7 +438,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       // 總問卷回應 34 筆 (29 雙題 + 3 僅答 Q_DEPT + 2 全未答)
@@ -453,7 +453,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       // 雙題皆有作答之有效人次為 29
@@ -577,7 +577,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${compSurvey.id}/analytics/crosstab?questionA=${qRow.id}&questionB=${qCol.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: compSurvey.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: compSurvey.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -605,7 +605,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenUserB
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -613,7 +613,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
       const req = new NextRequest(
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
 
@@ -622,7 +622,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/non-existent-id/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: "non-existent-id" } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: "non-existent-id" }) });
       expect(res.status).toBe(404);
     });
 
@@ -631,7 +631,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const rawText = await res.text();
 
       expect(rawText).not.toContain("responseId");
@@ -647,7 +647,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}&minCellSize=1`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       expect(data.minCellSize).toBe(5);
@@ -660,7 +660,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}&questionC=${qOther.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(400);
 
       const err = await res.json();
@@ -672,7 +672,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${surveyB.questions[0].id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(400);
 
       const err = await res.json();
@@ -684,7 +684,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const data = await res.json();
 
       expect(data.isAnonymous).toBe(true);
@@ -699,7 +699,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab/export?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenAdminA
       );
-      const res = await crosstabExportGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabExportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toContain("spreadsheetml");
 
@@ -712,7 +712,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab/export?questionA=${qDept.id}&questionB=${qSat.id}`,
         tokenViewerA
       );
-      const res = await crosstabExportGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabExportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -720,7 +720,7 @@ describe("Phase M9-F: Cross-tabulation & Demographic Segmentation Privacy Suite"
   describe("6. Regression Check (回歸驗證)", () => {
     it("22. existing M9-D & M9-E endpoints unaffected: 既有 /api/analytics 與 /api/surveys/:id/analytics/questions 運作正常", async () => {
       const req1 = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/analytics/questions`, tokenViewerA);
-      const res1 = await questionAnalyticsGET(req1, { params: { id: surveyA.id } });
+      const res1 = await questionAnalyticsGET(req1, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res1.status).toBe(200);
 
       const req2 = makeAuthReq("http://localhost:3000/api/analytics", tokenViewerA);

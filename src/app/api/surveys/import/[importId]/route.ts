@@ -6,10 +6,10 @@ import { getCurrentUser, isUserInOrganization, forbiddenResponse, unauthorizedRe
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { importId: string } }
+  { params }: { params: Promise<{ importId: string }> }
 ) {
   try {
-    const { importId } = params;
+    const { importId } = await params;
 
     const record = await db.surveyImport.findUnique({
       where: { importId },

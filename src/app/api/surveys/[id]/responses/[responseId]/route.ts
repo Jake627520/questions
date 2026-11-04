@@ -5,10 +5,10 @@ import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenRe
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string; responseId: string } }
+  { params }: { params: Promise<{ id: string; responseId: string }> }
 ) {
   try {
-    const { id, responseId } = params;
+    const { id, responseId } = await params;
     const response = await db.response.findUnique({
       where: { id: responseId },
       include: {
@@ -73,10 +73,10 @@ export async function GET(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; responseId: string } }
+  { params }: { params: Promise<{ id: string; responseId: string }> }
 ) {
   try {
-    const { id, responseId } = params;
+    const { id, responseId } = await params;
     const url = new URL(req.url);
     const force = url.searchParams.get("force") === "true";
 

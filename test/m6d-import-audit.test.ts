@@ -333,7 +333,7 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
       const req = new NextRequest("http://localhost:3000/api/surveys/import/IMP-DETAIL-TEST", {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await detailGET(req, { params: { importId: "IMP-DETAIL-TEST" } });
+      const res = await detailGET(req, { params: Promise.resolve({ importId: "IMP-DETAIL-TEST" }) });
       const data = await res.json();
 
       expect(res.status).toBe(200);
@@ -370,7 +370,7 @@ describe("Phase M6D: Enterprise Import History & Audit 驗證測試", () => {
       const req = new NextRequest("http://localhost:3000/api/surveys/import/IMP-CSV-ERR-TEST/errors", {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await errorCsvGET(req, { params: { importId: "IMP-CSV-ERR-TEST" } });
+      const res = await errorCsvGET(req, { params: Promise.resolve({ importId: "IMP-CSV-ERR-TEST" }) });
       const csvText = await res.text();
 
       expect(res.status).toBe(200);

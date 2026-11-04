@@ -320,7 +320,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         `http://localhost:3000/api/organizations/${orgBeta.id}`,
         sessionAlphaOwnerToken
       );
-      const res = await orgDetailGET(req, { params: { id: orgBeta.id } });
+      const res = await orgDetailGET(req, { params: Promise.resolve({ id: orgBeta.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -330,7 +330,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaOwnerToken,
         { method: "PATCH", body: { name: "Hacked Org Beta Name" } }
       );
-      const res = await orgDetailPATCH(req, { params: { id: orgBeta.id } });
+      const res = await orgDetailPATCH(req, { params: Promise.resolve({ id: orgBeta.id }) });
       expect(res.status).toBe(403);
 
       // 驗證 DB 內組織未被修改
@@ -348,7 +348,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         `http://localhost:3000/api/surveys/${surveyBeta.id}?mode=management`,
         sessionAlphaAdminToken
       );
-      const res = await surveyDetailGET(req, { params: { id: surveyBeta.id } });
+      const res = await surveyDetailGET(req, { params: Promise.resolve({ id: surveyBeta.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -358,7 +358,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaOwnerToken,
         { method: "PATCH", body: { title: "Malicious Title Tamper" } }
       );
-      const res = await surveyDetailPATCH(req, { params: { id: surveyBeta.id } });
+      const res = await surveyDetailPATCH(req, { params: Promise.resolve({ id: surveyBeta.id }) });
       expect(res.status).toBe(403);
 
       const checkSurvey = await db.survey.findUnique({ where: { id: surveyBeta.id } });
@@ -371,7 +371,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaEditorToken,
         { method: "POST" }
       );
-      const res = await cloneVersionPOST(req, { params: { id: surveyBeta.id } });
+      const res = await cloneVersionPOST(req, { params: Promise.resolve({ id: surveyBeta.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -380,7 +380,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         `http://localhost:3000/api/surveys/${surveyBeta.id}/export`,
         sessionAlphaAdminToken
       );
-      const res = await exportGET(req, { params: { id: surveyBeta.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyBeta.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -394,7 +394,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         `http://localhost:3000/api/surveys/${surveyBeta.id}/responses`,
         sessionAlphaAdminToken
       );
-      const res = await responsesGET(req, { params: { id: surveyBeta.id } });
+      const res = await responsesGET(req, { params: Promise.resolve({ id: surveyBeta.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -404,7 +404,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaAdminToken
       );
       const res = await singleResponseGET(req, {
-        params: { id: surveyBeta.id, responseId: responseBeta.id },
+        params: Promise.resolve({ id: surveyBeta.id, responseId: responseBeta.id }),
       });
       expect(res.status).toBe(403);
     });
@@ -416,7 +416,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         { method: "DELETE" }
       );
       const res = await singleResponseDELETE(req, {
-        params: { id: surveyBeta.id, responseId: responseBeta.id },
+        params: Promise.resolve({ id: surveyBeta.id, responseId: responseBeta.id }),
       });
       expect(res.status).toBe(403);
 
@@ -435,7 +435,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         `http://localhost:3000/api/surveys/${surveyBeta.id}/stats`,
         sessionAlphaAdminToken
       );
-      const res = await statsGET(req, { params: { id: surveyBeta.id } });
+      const res = await statsGET(req, { params: Promise.resolve({ id: surveyBeta.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -449,7 +449,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         `http://localhost:3000/api/organizations/${orgBeta.id}/invitations`,
         sessionAlphaAdminToken
       );
-      const res = await invitationsGET(req, { params: { id: orgBeta.id } });
+      const res = await invitationsGET(req, { params: Promise.resolve({ id: orgBeta.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -462,7 +462,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
           body: { email: "attacker-inject@alpha.com", role: Role.ADMIN },
         }
       );
-      const res = await createInvitationPOST(req, { params: { id: orgBeta.id } });
+      const res = await createInvitationPOST(req, { params: Promise.resolve({ id: orgBeta.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -473,7 +473,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         { method: "POST" }
       );
       const res = await revokeInvitationPOST(req, {
-        params: { id: orgBeta.id, invitationId: invitationBeta.id },
+        params: Promise.resolve({ id: orgBeta.id, invitationId: invitationBeta.id }),
       });
       expect(res.status).toBe(403);
 
@@ -492,19 +492,19 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         `http://localhost:3000/api/surveys/${surveyAlpha.id}?mode=management`,
         sessionAlphaViewerToken
       );
-      expect((await surveyDetailGET(reqViewSurvey, { params: { id: surveyAlpha.id } })).status).toBe(200);
+      expect((await surveyDetailGET(reqViewSurvey, { params: Promise.resolve({ id: surveyAlpha.id }) })).status).toBe(200);
 
       const reqViewStats = makeAuthReq(
         `http://localhost:3000/api/surveys/${surveyAlpha.id}/stats`,
         sessionAlphaViewerToken
       );
-      expect((await statsGET(reqViewStats, { params: { id: surveyAlpha.id } })).status).toBe(200);
+      expect((await statsGET(reqViewStats, { params: Promise.resolve({ id: surveyAlpha.id }) })).status).toBe(200);
 
       const reqViewResp = makeAuthReq(
         `http://localhost:3000/api/surveys/${surveyAlpha.id}/responses`,
         sessionAlphaViewerToken
       );
-      expect((await responsesGET(reqViewResp, { params: { id: surveyAlpha.id } })).status).toBe(200);
+      expect((await responsesGET(reqViewResp, { params: Promise.resolve({ id: surveyAlpha.id }) })).status).toBe(200);
 
       // 2. 寫入與敏感操作 -> DENIED (403)
       const reqPatchSurvey = makeAuthReq(
@@ -512,34 +512,34 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaViewerToken,
         { method: "PATCH", body: { title: "Viewer Tamper" } }
       );
-      expect((await surveyDetailPATCH(reqPatchSurvey, { params: { id: surveyAlpha.id } })).status).toBe(403);
+      expect((await surveyDetailPATCH(reqPatchSurvey, { params: Promise.resolve({ id: surveyAlpha.id }) })).status).toBe(403);
 
       const reqExport = makeAuthReq(
         `http://localhost:3000/api/surveys/${surveyAlpha.id}/export`,
         sessionAlphaViewerToken
       );
-      expect((await exportGET(reqExport, { params: { id: surveyAlpha.id } })).status).toBe(403);
+      expect((await exportGET(reqExport, { params: Promise.resolve({ id: surveyAlpha.id }) })).status).toBe(403);
 
       const reqClone = makeAuthReq(
         `http://localhost:3000/api/surveys/${surveyAlpha.id}/clone-version`,
         sessionAlphaViewerToken,
         { method: "POST" }
       );
-      expect((await cloneVersionPOST(reqClone, { params: { id: surveyAlpha.id } })).status).toBe(403);
+      expect((await cloneVersionPOST(reqClone, { params: Promise.resolve({ id: surveyAlpha.id }) })).status).toBe(403);
 
       const reqInvite = makeAuthReq(
         `http://localhost:3000/api/organizations/${orgAlpha.id}/invitations`,
         sessionAlphaViewerToken,
         { method: "POST", body: { email: "new@alpha.com", role: Role.VIEWER } }
       );
-      expect((await createInvitationPOST(reqInvite, { params: { id: orgAlpha.id } })).status).toBe(403);
+      expect((await createInvitationPOST(reqInvite, { params: Promise.resolve({ id: orgAlpha.id }) })).status).toBe(403);
 
       const reqPatchOrg = makeAuthReq(
         `http://localhost:3000/api/organizations/${orgAlpha.id}`,
         sessionAlphaViewerToken,
         { method: "PATCH", body: { name: "Viewer Rename" } }
       );
-      expect((await orgDetailPATCH(reqPatchOrg, { params: { id: orgAlpha.id } })).status).toBe(403);
+      expect((await orgDetailPATCH(reqPatchOrg, { params: Promise.resolve({ id: orgAlpha.id }) })).status).toBe(403);
     });
 
     it("EDITOR 角色：可編輯問卷、匯出與複製版本，但禁止邀請成員與修改組織", async () => {
@@ -549,13 +549,13 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaEditorToken,
         { method: "PATCH", body: { title: "Editor Updated Title" } }
       );
-      expect((await surveyDetailPATCH(reqPatchSurvey, { params: { id: surveyAlpha.id } })).status).toBe(200);
+      expect((await surveyDetailPATCH(reqPatchSurvey, { params: Promise.resolve({ id: surveyAlpha.id }) })).status).toBe(200);
 
       const reqExport = makeAuthReq(
         `http://localhost:3000/api/surveys/${surveyAlpha.id}/export`,
         sessionAlphaEditorToken
       );
-      expect((await exportGET(reqExport, { params: { id: surveyAlpha.id } })).status).toBe(200);
+      expect((await exportGET(reqExport, { params: Promise.resolve({ id: surveyAlpha.id }) })).status).toBe(200);
 
       // 2. 邀請成員與修改組織 -> DENIED (403)
       const reqInvite = makeAuthReq(
@@ -563,14 +563,14 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaEditorToken,
         { method: "POST", body: { email: "new@alpha.com", role: Role.VIEWER } }
       );
-      expect((await createInvitationPOST(reqInvite, { params: { id: orgAlpha.id } })).status).toBe(403);
+      expect((await createInvitationPOST(reqInvite, { params: Promise.resolve({ id: orgAlpha.id }) })).status).toBe(403);
 
       const reqPatchOrg = makeAuthReq(
         `http://localhost:3000/api/organizations/${orgAlpha.id}`,
         sessionAlphaEditorToken,
         { method: "PATCH", body: { name: "Editor Rename" } }
       );
-      expect((await orgDetailPATCH(reqPatchOrg, { params: { id: orgAlpha.id } })).status).toBe(403);
+      expect((await orgDetailPATCH(reqPatchOrg, { params: Promise.resolve({ id: orgAlpha.id }) })).status).toBe(403);
     });
 
     it("ADMIN 角色：具備組織管理與邀請權限", async () => {
@@ -579,7 +579,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaAdminToken,
         { method: "POST", body: { email: "m8e-admin-invited@alpha.com", role: Role.VIEWER } }
       );
-      const resInvite = await createInvitationPOST(reqInvite, { params: { id: orgAlpha.id } });
+      const resInvite = await createInvitationPOST(reqInvite, { params: Promise.resolve({ id: orgAlpha.id }) });
       expect(resInvite.status).toBe(201);
 
       const reqPatchOrg = makeAuthReq(
@@ -587,7 +587,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaAdminToken,
         { method: "PATCH", body: { name: "Org Alpha Renamed by Admin" } }
       );
-      const resPatchOrg = await orgDetailPATCH(reqPatchOrg, { params: { id: orgAlpha.id } });
+      const resPatchOrg = await orgDetailPATCH(reqPatchOrg, { params: Promise.resolve({ id: orgAlpha.id }) });
       expect(resPatchOrg.status).toBe(200);
     });
   });
@@ -602,7 +602,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         sessionAlphaAdminToken
       );
       const res = await singleResponseGET(req, {
-        params: { id: surveyAlpha.id, responseId: responseBeta.id },
+        params: Promise.resolve({ id: surveyAlpha.id, responseId: responseBeta.id }),
       });
       expect(res.status).toBe(404);
     });
@@ -614,7 +614,7 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
         { method: "POST" }
       );
       const res = await revokeInvitationPOST(req, {
-        params: { id: orgAlpha.id, invitationId: invitationBeta.id },
+        params: Promise.resolve({ id: orgAlpha.id, invitationId: invitationBeta.id }),
       });
       expect(res.status).toBe(404);
     });

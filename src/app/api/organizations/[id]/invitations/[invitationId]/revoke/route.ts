@@ -16,7 +16,7 @@ import {
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string; invitationId: string } }
+  { params }: { params: Promise<{ id: string; invitationId: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -24,7 +24,7 @@ export async function POST(
       return unauthorizedResponse();
     }
 
-    const { id: organizationId, invitationId } = params;
+    const { id: organizationId, invitationId } = await params;
 
     // 驗證存取者是否具備組織管理員權限 (OWNER / ADMIN)
     const { allowed, membership } = await hasRole(

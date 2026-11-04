@@ -24,7 +24,7 @@ class ResponseNotEditableError extends Error {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { publicToken: string } }
+  { params }: { params: Promise<{ publicToken: string }> }
 ) {
   let idempotencyKey: string | undefined;
   let currentPayloadHash: string = "";
@@ -32,7 +32,8 @@ export async function POST(
 
   try {
     // 限流 key 與問卷查詢使用同一個正規化 token，避免以前後空白開出新的限流桶
-    const publicToken = (params.publicToken ?? "").trim();
+    const { publicToken: routePublicToken } = await params;
+    const publicToken = (routePublicToken ?? "").trim();
 
     const limited = await enforceRateLimit({
       key: `submit:${publicToken}:${extractClientIp(req)}`,

@@ -16,7 +16,7 @@ import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -30,7 +30,7 @@ export async function GET(
     });
     if (limited) return limited;
 
-    const { id } = params;
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
     const timeRange = searchParams.get("timeRange") || "all";
     const statusParam = searchParams.get("status") || searchParams.get("statusFilter") || "ALL"; // "ALL" | "COMPLETED" | "IN_PROGRESS"
