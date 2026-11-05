@@ -492,4 +492,75 @@ describe("Security audit 2026-11 regression", () => {
       expect(await db.surveyImport.count({ where: { organizationId: orgId } })).toBe(0);
     });
   });
+  // [Medium] TOCTOU：作答狀態檢查與寫入之間沒有鎖，並發請求可覆寫已提交的作答
+  describe("concurrent draft/submit cannot both act on the same IN_PROGRESS response", () => {
+    const ROUNDS = 15;
+    const SUBMIT_VALUE = JSON.stringify("提交");
+
+    const freshDraft = async () =>
+      db.response.create({
+        data: {
+          surveyId: survey.id,
+          status: ResponseStatus.IN_PROGRESS,
+          createdById: userIds.editor,
+          answers: { create: { questionId: survey.questions[0].id, rawValue: JSON.stringify("原始答案") } },
+        },
+      });
+
+    const memberCall = (kind: "draft" | "submit", responseId: string, value: string) =>
+      (kind === "draft" ? memberDraftPOST : memberSubmitPOST)(
+        jsonReq(
+          `http://localhost/api/surveys/${survey.id}/${kind}`,
+          "POST",
+          { responseId, answers: [{ questionCode: "Q1", rawValue: value }] },
+          tokens.editor
+        ),
+        { params: Promise.resolve({ id: survey.id }) }
+      );
+
+    const publicCall = (kind: "draft" | "submit", responseId: string, value: string) =>
+      (kind === "draft" ? publicDraftPOST : publicSubmitPOST)(
+        jsonReq(`http://localhost/api/public/surveys/${survey.publicToken}/${kind}`, "POST", {
+          responseId,
+          answers: [{ questionCode: "Q1", rawValue: value }],
+        }),
+        { params: Promise.resolve({ publicToken: survey.publicToken }) }
+      );
+
+    // 已提交的作答只能留下提交那一次的答案，不能被並發的草稿清空或混入
+    const expectCompletedKeepsSubmitAnswers = async (responseId: string) => {
+      const answers = await db.answer.findMany({ where: { responseId } });
+      if ((await statusOf(responseId)) === ResponseStatus.COMPLETED) {
+        expect(answers.map((a) => a.rawValue)).toEqual([SUBMIT_VALUE]);
+      }
+    };
+
+    for (const [label, call] of [
+      ["member", memberCall],
+      ["public", publicCall],
+    ] as const) {
+      it(`${label}: two concurrent submits — exactly one succeeds, the other gets 409`, async () => {
+        for (let i = 0; i < ROUNDS; i++) {
+          const draft = await freshDraft();
+          const results = await Promise.all([
+            call("submit", draft.id, "提交"),
+            call("submit", draft.id, "提交"),
+          ]);
+          expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+        }
+      });
+
+      it(`${label}: concurrent submit + draft never leaves a COMPLETED response with draft answers`, async () => {
+        for (let i = 0; i < ROUNDS; i++) {
+          const draft = await freshDraft();
+          const results = await Promise.all([
+            call("submit", draft.id, "提交"),
+            call("draft", draft.id, "草稿"),
+          ]);
+          for (const r of results) expect([200, 409]).toContain(r.status);
+          await expectCompletedKeepsSubmitAnswers(draft.id);
+        }
+      });
+    }
+  });
 });

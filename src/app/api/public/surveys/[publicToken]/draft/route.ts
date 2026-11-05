@@ -4,19 +4,13 @@ import { AnswerSubmission } from "@/lib/types";
 import { ResponseStatus, SurveyStatus } from "@prisma/client";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { extractClientIp } from "@/lib/submission-integrity";
+import { claimInProgressResponse, ResponseNotEditableError } from "@/lib/response-claim";
 
 export const dynamic = "force-dynamic";
 
 /**
  * 公開問卷草稿暫存與讀取 API (Public Survey Draft)
  */
-class ResponseNotEditableError extends Error {
-  constructor() {
-    super("此作答已提交或已排除，不可再暫存");
-    this.name = "ResponseNotEditableError";
-  }
-}
-
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ publicToken: string }> }
@@ -64,9 +58,15 @@ export async function POST(
         if (resp && resp.surveyId !== survey.id) {
           throw new Error("無效的作答草稿記錄 (Cross-survey Draft ID Invalid)");
         }
-        // 已提交或已排除的作答不可被重開為草稿並清空答案
-        if (resp && resp.status !== ResponseStatus.IN_PROGRESS) {
-          throw new ResponseNotEditableError();
+        // 已提交或已排除的作答不可被重開為草稿並清空答案；
+        // 在 transaction 內佔住該列，避免與並發的提交互相覆寫
+        if (resp) {
+          await claimInProgressResponse(
+            tx,
+            { id: resp.id, surveyId: survey.id },
+            { status: ResponseStatus.IN_PROGRESS },
+            "此作答已提交或已排除，不可再暫存"
+          );
         }
       }
 

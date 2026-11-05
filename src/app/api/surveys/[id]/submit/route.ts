@@ -10,6 +10,7 @@ import {
   forbiddenResponse,
   denyUnlessCanResumeResponse,
 } from "@/lib/auth";
+import { claimInProgressResponse, ResponseNotEditableError } from "@/lib/response-claim";
 
 export async function POST(
   req: NextRequest,
@@ -125,17 +126,20 @@ export async function POST(
       let response;
 
       if (responseId) {
-        // 更新現有草稿為正式提交
-        response = await tx.response.update({
-          where: { id: responseId },
-          data: {
+        // 在 transaction 內原子地把 IN_PROGRESS 改成 COMPLETED；並發請求已先改掉狀態則 409
+        await claimInProgressResponse(
+          tx,
+          { id: responseId, surveyId: survey.id },
+          {
             status: ResponseStatus.COMPLETED,
             totalScore: evaluation.totalScore,
             maxScore: evaluation.maxScore,
             percentage: evaluation.percentage,
             submittedAt: new Date(),
           },
-        });
+          "此作答已提交或已排除，不可再提交"
+        );
+        response = await tx.response.findUniqueOrThrow({ where: { id: responseId } });
         // 清理舊答案再重新寫入
         await tx.answer.deleteMany({ where: { responseId: response.id } });
       } else {
@@ -203,6 +207,12 @@ export async function POST(
       evaluation,
     });
   } catch (error: any) {
+    if (error instanceof ResponseNotEditableError) {
+      return NextResponse.json(
+        { error: "RESPONSE_NOT_EDITABLE", message: error.message },
+        { status: 409 }
+      );
+    }
     console.error("Error submitting survey response:", error);
     return NextResponse.json(
       { error: "提交問卷失敗" },
