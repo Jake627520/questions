@@ -15,12 +15,7 @@ import {
 } from "@/lib/submission-integrity";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
-class ResponseNotEditableError extends Error {
-  constructor() {
-    super("此作答已提交或已排除，不可再提交");
-    this.name = "ResponseNotEditableError";
-  }
-}
+import { claimInProgressResponse, ResponseNotEditableError } from "@/lib/response-claim";
 
 export async function POST(
   req: NextRequest,
@@ -291,15 +286,13 @@ export async function POST(
           throw new Error("無效的作答草稿記錄 (Cross-survey Draft ID Invalid)");
         }
 
-        // 只有未完成的草稿可以提交；已提交或已被排除的作答不可被覆寫或自行恢復
-        if (existingDraft.status !== ResponseStatus.IN_PROGRESS) {
-          throw new ResponseNotEditableError();
-        }
-
-        // 更新現有草稿為正式提交
-        response = await tx.response.update({
-          where: { id: responseId },
-          data: {
+        // 只有未完成的草稿可以提交；已提交或已被排除的作答不可被覆寫或自行恢復。
+        // 在 transaction 內原子地把 IN_PROGRESS 改成 COMPLETED：survey FOR UPDATE 只序列化
+        // public 之間，member submit 不拿該鎖，所以要靠列鎖＋狀態條件擋並發（count≠1 → 409）
+        await claimInProgressResponse(
+          tx,
+          { id: responseId, surveyId: survey.id },
+          {
             status: ResponseStatus.COMPLETED,
             idempotencyKey: idempotencyKey || undefined,
             payloadHash: currentPayloadHash || undefined,
@@ -313,7 +306,9 @@ export async function POST(
             percentage: evaluation.percentage,
             submittedAt: now,
           },
-        });
+          "此作答已提交或已排除，不可再提交"
+        );
+        response = await tx.response.findUniqueOrThrow({ where: { id: responseId } });
         // 清理舊答案再重新寫入
         await tx.answer.deleteMany({ where: { responseId: response.id } });
       } else {

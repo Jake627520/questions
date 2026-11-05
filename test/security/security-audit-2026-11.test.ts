@@ -535,6 +535,17 @@ describe("Security audit 2026-11 regression", () => {
       }
     };
 
+    it("public submit + member submit on the same draft — exactly one succeeds, the other gets 409", async () => {
+      for (let i = 0; i < ROUNDS; i++) {
+        const draft = await freshDraft();
+        const results = await Promise.all([
+          publicCall("submit", draft.id, "提交"),
+          memberCall("submit", draft.id, "提交"),
+        ]);
+        expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+      }
+    });
+
     for (const [label, call] of [
       ["member", memberCall],
       ["public", publicCall],
