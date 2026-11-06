@@ -37,6 +37,8 @@ export async function GET() {
         system: {
           heapUsedMB,
           rssMB,
+          // 供確認 runtime 已套用 Node.js 安全修補
+          nodeVersion: process.version,
         },
       },
       { status: 200 }

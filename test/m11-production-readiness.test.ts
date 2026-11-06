@@ -118,6 +118,7 @@ describe("Phase M11: Production Readiness & Operational Governance Audit", () =>
       expect(json.checks.service).toBe("UP");
       expect(typeof json.uptimeSeconds).toBe("number");
       expect(typeof json.system.heapUsedMB).toBe("number");
+      expect(json.system.nodeVersion).toBe(process.version);
 
       // 嚴格 Zero-Leak 斷言
       const resStr = JSON.stringify(json);
