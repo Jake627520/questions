@@ -8,6 +8,7 @@
  * - 標頭是否大致正確
  * - 題目 code 是否重複 / 空值
  * - choices 的 question_code 是否指向存在的題目
+ * - 第一個非空白儲存格以 `#` 開頭的列視為註解列，整列忽略
  */
 
 import ExcelJS from 'exceljs';
@@ -16,6 +17,7 @@ import {
   ClientValidationResult,
   safeDisplayValue,
 } from '../types/surveyImport';
+import { isCommentRow } from './excel-comment-row';
 
 // ============================================================
 // 設定（可依需求調整）
@@ -184,6 +186,7 @@ export async function validateSurveyExcel(
 
   questionsSheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return; // 跳過標頭
+    if (isCommentRow(row)) return; // `#` 開頭的註解列（如範本第 2 列中文說明）整列忽略
 
     const getVal = (header: string) => {
       const col = questionHeaders[header];
@@ -306,6 +309,7 @@ export async function validateSurveyExcel(
 
     choicesSheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
+      if (isCommentRow(row)) return;
 
       const getVal = (header: string) => {
         const col = choiceHeaders[header];

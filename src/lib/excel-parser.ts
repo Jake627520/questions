@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { QuestionInput, ChoiceInput, QuestionType, QuestionTypeEnum } from "./types";
 import { ValidationIssue } from "../types/surveyImport";
 import { escapeFormulaString } from "./excel-formula-safety";
+import { isCommentRow } from "./excel-comment-row";
 
 export function parseStrictBoolean(
   val: any,
@@ -357,8 +358,13 @@ export async function parseSurveyExcel(
     questionHeaders[header] = colNumber;
   });
 
+  let questionCommentRows = 0;
   questionsSheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return; // Skip header
+    if (isCommentRow(row)) {
+      questionCommentRows++;
+      return; // `#` 開頭的註解列（如範本第 2 列中文說明）整列忽略
+    }
 
     const getVal = (headerName: string) => {
       const colIdx = questionHeaders[headerName];
@@ -436,7 +442,7 @@ export async function parseSurveyExcel(
     }
 
     const hasOrderCol = questionHeaders["order_num"] !== undefined;
-    let orderNum = rowNumber - 1;
+    let orderNum = rowNumber - 1 - questionCommentRows;
     if (hasOrderCol) {
       const parsedOrder = parseStrictOrderNum(getVal("order_num"), "order_num", rowNumber, "questions", issues, errors);
       if (parsedOrder !== null) {
@@ -582,7 +588,7 @@ export async function parseSurveyExcel(
 
     questionsMap.set(code, {
       rowNum: rowNumber,
-      orderNum: orderNum ?? rowNumber - 1,
+      orderNum,
       code,
       title,
       description,
@@ -610,6 +616,7 @@ export async function parseSurveyExcel(
 
     choicesSheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // Skip header
+      if (isCommentRow(row)) return; // `#` 開頭的註解列整列忽略
 
       const getVal = (headerName: string) => {
         const colIdx = choiceHeaders[headerName];
