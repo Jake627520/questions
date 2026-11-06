@@ -86,12 +86,7 @@ function LoginForm() {
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
               登入密碼
             </label>
-            <Link
-              href="/forgot-password"
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium transition"
-            >
-              忘記密碼？
-            </Link>
+            <span className="text-xs text-slate-500">忘記密碼？請聯絡管理者重設密碼</span>
           </div>
           <div className="relative">
             <Lock className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -132,13 +127,19 @@ function LoginForm() {
       </form>
 
       <div className="mt-8 pt-6 border-t border-slate-100 text-center text-sm text-slate-500">
-        尚未建立帳號？{" "}
-        <Link
-          href={`/register${returnTo !== "/" ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`}
-          className="text-blue-600 font-semibold hover:underline"
-        >
-          免費註冊帳號
-        </Link>
+        {returnTo.startsWith("/invite/") ? (
+          <>
+            尚未建立帳號？{" "}
+            <Link
+              href={`/register?returnTo=${encodeURIComponent(returnTo)}`}
+              className="text-blue-600 font-semibold hover:underline"
+            >
+              以受邀信箱註冊
+            </Link>
+          </>
+        ) : (
+          <>尚未建立帳號？本系統僅限受邀註冊，請向管理者索取邀請連結。</>
+        )}
       </div>
     </div>
   );

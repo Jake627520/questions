@@ -228,7 +228,7 @@ export default function AcceptInvitationPage() {
               登入既有帳號
             </Link>
             <Link
-              href={`/register?returnTo=/invite/${token}`}
+              href={`/register?invite=${token}`}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors"
             >
               <UserPlus className="w-4 h-4" />

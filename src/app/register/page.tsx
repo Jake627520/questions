@@ -9,6 +9,9 @@ function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") || "/";
+  // 註冊僅限受邀：token 來自 ?invite=，或舊連結的 ?returnTo=/invite/<token>
+  const inviteToken =
+    searchParams.get("invite") || returnTo.match(/^\/invite\/([^/?#]+)$/)?.[1] || "";
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -39,7 +42,7 @@ function RegisterForm() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, confirmPassword }),
+        body: JSON.stringify({ name, email, password, confirmPassword, inviteToken }),
       });
 
       const data = await res.json();
@@ -50,14 +53,35 @@ function RegisterForm() {
         return;
       }
 
-      // 註冊成功並已寫入 Cookie，導向指定頁面
-      router.push(returnTo);
+      // 註冊成功並已寫入 Cookie；邀請已在註冊時消耗，不再回到邀請頁
+      router.push(returnTo.startsWith("/invite/") ? "/" : returnTo);
       router.refresh();
     } catch (err: any) {
       setError("連線失敗，請檢查網路連線後再試");
       setLoading(false);
     }
   };
+
+  if (!inviteToken) {
+    return (
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 mb-4 shadow-sm">
+          <UserPlus className="w-7 h-7" />
+        </div>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight font-serif">僅限受邀註冊</h1>
+        <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+          本系統不開放公開註冊。請向工作區管理者索取邀請連結，並使用連結開啟註冊頁。
+        </p>
+        <Link
+          href="/login"
+          className="inline-flex items-center justify-center gap-2 mt-6 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors"
+        >
+          前往登入
+          <ArrowRight className="w-4 h-4" />
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
@@ -66,7 +90,7 @@ function RegisterForm() {
           <UserPlus className="w-7 h-7" />
         </div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight font-serif">建立新帳號</h1>
-        <p className="text-sm text-slate-500 mt-1.5">建立您的帳號以開始建立問卷並與團隊共同協作</p>
+        <p className="text-sm text-slate-500 mt-1.5">請使用受邀的電子郵件建立帳號，完成後即加入邀請您的工作區</p>
       </div>
 
       {error && (

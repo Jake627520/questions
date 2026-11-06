@@ -3,6 +3,8 @@ import { db } from "../src/lib/db";
 import {
   hashPassword,
   createSession,
+  generateInvitationToken,
+  hashInvitationToken,
   getSafeReturnUrl,
   SESSION_COOKIE_NAME,
 } from "../src/lib/auth";
@@ -25,6 +27,9 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
     // 清理測試資料
     await db.session.deleteMany({
       where: { user: { email: { startsWith: "m8a-" } } },
+    });
+    await db.invitation.deleteMany({
+      where: { organization: { slug: { startsWith: "m8a-" } } },
     });
     await db.membership.deleteMany({
       where: { user: { email: { startsWith: "m8a-" } } },
@@ -106,8 +111,28 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
   // 2. Register Scenarios
   // =========================================================================
   describe("2. 註冊功能驗證 (Register Scenarios)", () => {
-    it("4. 註冊成功：建立 User、預設 Organization、Session 並自動登入", async () => {
+    // 註冊僅限受邀 (M12)：每個情境都帶一張有效邀請
+    async function inviteFor(email: string) {
+      const org = await db.organization.create({
+        data: { name: "M8A Invite Org", slug: `m8a-invite-${Date.now()}` },
+      });
+      const rawToken = generateInvitationToken();
+      await db.invitation.create({
+        data: {
+          organizationId: org.id,
+          invitedEmail: email,
+          role: "OWNER",
+          tokenHash: hashInvitationToken(rawToken),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          createdById: testUser.id,
+        },
+      });
+      return rawToken;
+    }
+
+    it("4. 受邀註冊成功：建立 User、加入邀請方 Organization、Session 並自動登入", async () => {
       const regEmail = "m8a-newbie@example.com";
+      const inviteToken = await inviteFor(regEmail);
       const req = new NextRequest("http://localhost:3000/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
@@ -115,6 +140,7 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
           email: regEmail,
           password: "SecurePass888!",
           confirmPassword: "SecurePass888!",
+          inviteToken,
         }),
       });
 
@@ -124,7 +150,7 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
       expect(data.success).toBe(true);
       expect(data.user.email).toBe(regEmail);
 
-      // 驗證 DB 內部存在該 User 以及自動建立的 OWNER 組織
+      // 驗證 DB 內部存在該 User 以及邀請指派的角色
       const checkUser = await db.user.findUnique({
         where: { email: regEmail },
         include: { memberships: { include: { organization: true } } },
@@ -138,6 +164,7 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
     });
 
     it("5. 重複 Email 註冊：應回傳 409 Conflict 錯誤", async () => {
+      const inviteToken = await inviteFor(testEmail);
       const req = new NextRequest("http://localhost:3000/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
@@ -145,6 +172,7 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
           email: testEmail, // 已存在的 Email
           password: "AnotherPassword123!",
           confirmPassword: "AnotherPassword123!",
+          inviteToken,
         }),
       });
 
@@ -155,6 +183,7 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
     });
 
     it("6. 兩次輸入密碼不符：應回傳 400 Bad Request", async () => {
+      const inviteToken = await inviteFor("m8a-mismatch@example.com");
       const req = new NextRequest("http://localhost:3000/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
@@ -162,6 +191,7 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
           email: "m8a-mismatch@example.com",
           password: "Password1234!",
           confirmPassword: "PasswordDifferent!",
+          inviteToken,
         }),
       });
 
