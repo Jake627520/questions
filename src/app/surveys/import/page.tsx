@@ -37,7 +37,6 @@ export default function ImportSurveyPage() {
   const [description, setDescription] = useState(
     "感謝您撥冗填寫，本問卷旨在評估產品功能與體驗回饋。"
   );
-  const [status, setStatus] = useState<"PUBLISHED" | "DRAFT">("DRAFT");
   const [copyrightConfirmed, setCopyrightConfirmed] = useState(false);
 
   const [previewData, setPreviewData] = useState<QuestionInput[] | null>(null);
@@ -204,25 +203,6 @@ export default function ImportSurveyPage() {
       return;
     }
 
-    // ===== PUBLISHED 二次確認 =====
-    if (status === 'PUBLISHED') {
-      const questionCount =
-        previewSummary?.questions ?? clientValidation?.summary?.questionCount ?? previewData?.length ?? '?';
-      const choiceCount = previewSummary?.choices ?? clientValidation?.summary?.choiceCount ?? '?';
-
-      const confirmed = window.confirm(
-        `您即將「直接發布」這份問卷！\n\n` +
-        `即將建立：${title}\n` +
-        `題數：${questionCount} 題\n` +
-        `選項數：${choiceCount} 個\n\n` +
-        `發布後填答者即可立即填寫。\n` +
-        `確定要繼續嗎？\n\n` +
-        `（建議測試時先選擇「儲存為草稿」）`
-      );
-
-      if (!confirmed) return;
-    }
-
     try {
       setSaving(true);
       const formData = new FormData();
@@ -230,7 +210,6 @@ export default function ImportSurveyPage() {
       formData.append("mode", "save");
       formData.append("title", title);
       formData.append("description", description);
-      formData.append("status", status);
       formData.append("copyrightConfirmed", copyrightConfirmed ? "true" : "false");
 
       const res = await fetch("/api/surveys/import", {
@@ -494,14 +473,9 @@ export default function ImportSurveyPage() {
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700">發布狀態</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as any)}
-              className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="DRAFT">儲存為草稿 (DRAFT - 建議)</option>
-              <option value="PUBLISHED">直接發布 (PUBLISHED)</option>
-            </select>
+            <p className="w-full px-3.5 py-2 text-sm border border-slate-200 bg-slate-50 text-slate-600 rounded-lg">
+              匯入後一律存為草稿，請到問卷列表審閱後再發布。
+            </p>
           </div>
 
           <div className="md:col-span-2 space-y-1.5">
