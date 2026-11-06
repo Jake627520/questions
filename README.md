@@ -131,7 +131,7 @@
 ## 快速開始
 
 ### 環境需求
-- Node.js 20.x 或 22.x
+- Node.js 22.x
 - PostgreSQL 14+ (本地或容器化實例)
 - npm 10+
 
