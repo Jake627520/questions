@@ -523,6 +523,9 @@ export async function POST(req: NextRequest) {
       });
 
       return { survey: createdSurvey, importRecord: createdImport };
+    }, {
+      // 一份問卷的題目與選項是逐筆巢狀寫入，題數多時會超過 Prisma 預設的 5 秒。
+      timeout: 20_000,
     });
 
     return NextResponse.json({
