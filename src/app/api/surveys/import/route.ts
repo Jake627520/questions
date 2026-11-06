@@ -4,7 +4,7 @@ import { validateQuestionsStructure } from "@/lib/survey-engine";
 import { db } from "@/lib/db";
 import { ImportStatus, QuestionType, SurveyStatus } from "@prisma/client";
 import { ImportResponse, ValidationIssue } from "@/types/surveyImport";
-import { getCurrentUser, isUserInOrganization, forbiddenResponse, unauthorizedResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
+import { getCurrentUser, getActiveOrganizationContext, isUserInOrganization, forbiddenResponse, unauthorizedResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { extractClientIp } from "@/lib/submission-integrity";
 
@@ -66,7 +66,8 @@ export async function POST(req: NextRequest) {
     const mode = (formData.get("mode") as string) || "preview";
     const title = (formData.get("title") as string) || "匯入題庫問卷";
     const description = (formData.get("description") as string) || "";
-    const requestedOrgId = (formData.get("organizationId") as string) || "default-org-id";
+    const explicitOrgId = ((formData.get("organizationId") as string) || "").trim();
+    const requestedOrgId = explicitOrgId || "default-org-id";
     const statusParam = (formData.get("status") as string) || "";
     if (statusParam.toUpperCase() === "PUBLISHED") {
       const issue: ValidationIssue = {
@@ -114,9 +115,14 @@ export async function POST(req: NextRequest) {
         slug: "default",
       },
     });
-    let organizationId = requestedOrgId || defaultOrg.id;
-
     const auth = await getCurrentUser(req);
+
+    // 前端未指定組織時，改用登入者的 active organization（未加入任何組織才退回 default），
+    // 否則不屬於 default 組織的使用者一律被下方的成員檢查擋成 403。
+    let organizationId =
+      explicitOrgId ||
+      (auth ? (await getActiveOrganizationContext(req))?.organization.id : undefined) ||
+      defaultOrg.id;
     const limited = await enforceRateLimit({
       key: `import:${auth?.user.id ?? extractClientIp(req)}`,
       ...RATE_LIMITS.import,
@@ -138,7 +144,7 @@ export async function POST(req: NextRequest) {
       if (!auth) {
         return unauthorizedResponse("未授權存取，請先登入系統才能進行問卷預覽操作");
       }
-      if (requestedOrgId && requestedOrgId !== defaultOrg.id) {
+      if (organizationId !== defaultOrg.id) {
         const isMember = await isUserInOrganization(auth.user.id, organizationId);
         if (!isMember) {
           return forbiddenResponse("您非該組織成員，無權在此組織預覽問卷");
