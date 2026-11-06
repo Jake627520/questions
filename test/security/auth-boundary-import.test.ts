@@ -191,6 +191,35 @@ describe("Authentication Boundary & Parser Data Integrity Tests", () => {
       expect(data.surveyId).toBeDefined();
     });
 
+    it("未帶 organizationId 時（匯入頁面的實際行為），應匯入至登入者所屬組織而非 default 組織", async () => {
+      const wb = new ExcelJS.Workbook();
+      const qSheet = wb.addWorksheet("questions");
+      qSheet.addRow(["code", "title", "question_type"]);
+      qSheet.addRow(["Q1", "題目 1", "text"]);
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const formData = new FormData();
+      formData.append("file", blob, "test.xlsx");
+      formData.append("mode", "save");
+      formData.append("copyrightConfirmed", "true");
+
+      const req = new NextRequest("http://localhost:3000/api/surveys/import", {
+        method: "POST",
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${editorToken}` },
+        body: formData,
+      });
+
+      const res = await importPOST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      const survey = await db.survey.findUnique({ where: { id: data.surveyId } });
+      expect(survey?.organizationId).toBe(orgId);
+    });
+
     it("若 parentSurveyId 指向無權限之跨組織問卷，覆寫 organizationId 後重驗應回傳 403 Forbidden", async () => {
       // 建立另一外部組織與其問卷
       const otherOrgId = "other-org-cross-tenant";

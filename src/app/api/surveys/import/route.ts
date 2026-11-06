@@ -4,7 +4,7 @@ import { validateQuestionsStructure } from "@/lib/survey-engine";
 import { db } from "@/lib/db";
 import { ImportStatus, QuestionType, SurveyStatus } from "@prisma/client";
 import { ImportResponse, ValidationIssue } from "@/types/surveyImport";
-import { getCurrentUser, isUserInOrganization, forbiddenResponse, unauthorizedResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
+import { getCurrentUser, getActiveOrganizationContext, isUserInOrganization, forbiddenResponse, unauthorizedResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 function generateImportId(): string {
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     const mode = (formData.get("mode") as string) || "preview";
     const title = (formData.get("title") as string) || "匯入題庫問卷";
     const description = (formData.get("description") as string) || "";
-    const requestedOrgId = (formData.get("organizationId") as string) || "default-org-id";
+    const explicitOrgId = ((formData.get("organizationId") as string) || "").trim();
     const status = SurveyStatus.DRAFT;
     const parentSurveyId = (formData.get("parentSurveyId") as string) || null;
 
@@ -94,7 +94,12 @@ export async function POST(req: NextRequest) {
         slug: "default",
       },
     });
-    let organizationId = requestedOrgId || defaultOrg.id;
+    // 前端未指定組織時，改用登入者的 active organization（未加入任何組織才退回 default），
+    // 否則不屬於 default 組織的使用者一律被下方的成員檢查擋成 403。
+    let organizationId =
+      explicitOrgId ||
+      (await getActiveOrganizationContext(req))?.organization.id ||
+      defaultOrg.id;
 
     if (mode === "save") {
       const { allowed, membership } = await hasRole(auth.user.id, organizationId, ROLES.EDITORS);
@@ -105,7 +110,7 @@ export async function POST(req: NextRequest) {
         return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能匯入問卷");
       }
     } else {
-      if (requestedOrgId && requestedOrgId !== defaultOrg.id) {
+      if (organizationId !== defaultOrg.id) {
         const isMember = await isUserInOrganization(auth.user.id, organizationId);
         if (!isMember) {
           return forbiddenResponse("您非該組織成員，無權在此組織預覽問卷");
