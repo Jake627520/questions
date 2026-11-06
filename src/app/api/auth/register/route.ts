@@ -141,6 +141,13 @@ export async function POST(req: NextRequest) {
           { status: 403 }
         );
       }
+      // 並發註冊同一 Email (兩張不同邀請)：落敗者撞 unique，交易已回滾、邀請未消耗
+      if (err.code === "P2002") {
+        return NextResponse.json(
+          { error: "EMAIL_ALREADY_EXISTS", message: "此電子郵件已被註冊" },
+          { status: 409 }
+        );
+      }
       throw err;
     }
 
