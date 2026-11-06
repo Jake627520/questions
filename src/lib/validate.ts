@@ -55,6 +55,8 @@ export const RegisterSchema = z.object({
   email: z.string().min(1),
   password: z.string().min(1),
   confirmPassword: z.string().optional(),
+  // 註冊僅限受邀：缺少時由 route 回 403 INVITATION_REQUIRED (而非 400)
+  inviteToken: z.string().optional(),
 });
 
 export const ResetPasswordSchema = z.object({
