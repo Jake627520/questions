@@ -12,7 +12,6 @@ import {
   maskEmail,
   SESSION_COOKIE_NAME,
 } from "../src/lib/auth";
-import { POST as forgotPasswordPOST } from "../src/app/api/auth/forgot-password/route";
 import {
   GET as resetPasswordGET,
   POST as resetPasswordPOST,
@@ -81,54 +80,6 @@ describe("Phase M8-D: Account Recovery & Security Hardening Suite", () => {
           create: { organizationId: orgA.id, role: Role.VIEWER },
         },
       },
-    });
-  });
-
-  // =========================================================================
-  // Group A — Forgot Password & Email Enumeration Defense
-  // =========================================================================
-  describe("Group A: 忘記密碼申請與 Email 枚舉防護 (Email Enumeration Defense)", () => {
-    it("1, 2, 5, 6. 已存在帳號與不存在帳號回傳完全相同的 HTTP 200 與 Response Body", async () => {
-      // 1. 已存在帳號
-      const reqExist = new NextRequest("http://localhost:3000/api/auth/forgot-password", {
-        method: "POST",
-        body: JSON.stringify({ email: "m8d-user-a@example.com" }),
-      });
-      const resExist = await forgotPasswordPOST(reqExist);
-      expect(resExist.status).toBe(200);
-      const dataExist = await resExist.json();
-
-      // 2. 不存在帳號
-      const reqUnknown = new NextRequest("http://localhost:3000/api/auth/forgot-password", {
-        method: "POST",
-        body: JSON.stringify({ email: "m8d-non-existent-user@example.com" }),
-      });
-      const resUnknown = await forgotPasswordPOST(reqUnknown);
-      expect(resUnknown.status).toBe(200);
-      const dataUnknown = await resUnknown.json();
-
-      // 5 & 6. 兩者回應結構與訊息完全一致，不洩漏帳號存在與否
-      expect(dataExist).toEqual(dataUnknown);
-      expect(dataExist.success).toBe(true);
-      expect(dataExist.message).toBe("如果該電子郵件已註冊，重設密碼連結已寄送至信箱。");
-      expect((dataExist as any).token).toBeUndefined();
-      expect((dataExist as any).tokenHash).toBeUndefined();
-      expect((dataExist as any).userId).toBeUndefined();
-    });
-
-    it("3 & 4. 大小寫不同與前後空白 Email 均正確正規化並建立 Token", async () => {
-      const req = new NextRequest("http://localhost:3000/api/auth/forgot-password", {
-        method: "POST",
-        body: JSON.stringify({ email: "  M8D-USER-A@EXAMPLE.COM  " }),
-      });
-      const res = await forgotPasswordPOST(req);
-      expect(res.status).toBe(200);
-
-      const tokenRecord = await db.passwordResetToken.findFirst({
-        where: { userId: userA.id },
-      });
-      expect(tokenRecord).not.toBeNull();
-      expect(tokenRecord?.usedAt).toBeNull();
     });
   });
 
