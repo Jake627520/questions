@@ -10,7 +10,7 @@ import {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -18,7 +18,7 @@ export async function GET(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const targetSurvey = await db.survey.findUnique({
       where: { id },
       select: {
@@ -142,7 +142,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Error fetching survey lineage:", error);
     return NextResponse.json(
-      { error: "取得版本溯源失敗", details: error.message },
+      { error: "取得版本溯源失敗" },
       { status: 500 }
     );
   }

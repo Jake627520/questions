@@ -11,7 +11,7 @@ import {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string; responseId: string } }
+  { params }: { params: Promise<{ id: string; responseId: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -19,7 +19,7 @@ export async function PATCH(
       return unauthorizedResponse();
     }
 
-    const { id, responseId } = params;
+    const { id, responseId } = await params;
     const body = await req.json();
     const targetStatus = body.status as ResponseStatus;
     const reason = body.reason as string | undefined;
@@ -100,7 +100,7 @@ export async function PATCH(
   } catch (error: any) {
     console.error("Error updating response status:", error);
     return NextResponse.json(
-      { error: "修改作答狀態失敗", details: error.message },
+      { error: "修改作答狀態失敗" },
       { status: 500 }
     );
   }

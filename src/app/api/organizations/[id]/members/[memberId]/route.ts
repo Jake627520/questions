@@ -27,7 +27,7 @@ import { Role } from "@prisma/client";
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string; memberId: string } }
+  { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -35,7 +35,7 @@ export async function PATCH(
       return unauthorizedResponse();
     }
 
-    const { id: organizationId, memberId } = params;
+    const { id: organizationId, memberId } = await params;
 
     // 1. 驗證呼叫者在該組織的 Membership
     const callerMembership = await getUserMembership(auth.user.id, organizationId);
@@ -166,7 +166,7 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; memberId: string } }
+  { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -174,7 +174,7 @@ export async function DELETE(
       return unauthorizedResponse();
     }
 
-    const { id: organizationId, memberId } = params;
+    const { id: organizationId, memberId } = await params;
 
     // 1. 驗證呼叫者在該組織的 Membership
     const callerMembership = await getUserMembership(auth.user.id, organizationId);

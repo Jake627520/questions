@@ -15,16 +15,20 @@ import {
 } from "@/lib/submission-integrity";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
+import { claimInProgressResponse, ResponseNotEditableError } from "@/lib/response-claim";
+
 export async function POST(
   req: NextRequest,
-  { params }: { params: { publicToken: string } }
+  { params }: { params: Promise<{ publicToken: string }> }
 ) {
   let idempotencyKey: string | undefined;
   let currentPayloadHash: string = "";
   let surveyIdForError: string | undefined;
 
   try {
-    const { publicToken } = params;
+    // 限流 key 與問卷查詢使用同一個正規化 token，避免以前後空白開出新的限流桶
+    const { publicToken: routePublicToken } = await params;
+    const publicToken = (routePublicToken ?? "").trim();
 
     const limited = await enforceRateLimit({
       key: `submit:${publicToken}:${extractClientIp(req)}`,
@@ -56,7 +60,7 @@ export async function POST(
 
     currentPayloadHash = calculatePayloadHash(answers || []);
 
-    if (!publicToken || publicToken.trim() === "") {
+    if (!publicToken) {
       return NextResponse.json(
         { error: "INVALID_PUBLIC_TOKEN", message: "請提供有效的問卷 Public Token" },
         { status: 400 }
@@ -64,7 +68,7 @@ export async function POST(
     }
 
     const survey = await db.survey.findUnique({
-      where: { publicToken: publicToken.trim() },
+      where: { publicToken },
       include: {
         questions: {
           orderBy: { orderNum: "asc" },
@@ -282,10 +286,13 @@ export async function POST(
           throw new Error("無效的作答草稿記錄 (Cross-survey Draft ID Invalid)");
         }
 
-        // 更新現有草稿為正式提交
-        response = await tx.response.update({
-          where: { id: responseId },
-          data: {
+        // 只有未完成的草稿可以提交；已提交或已被排除的作答不可被覆寫或自行恢復。
+        // 在 transaction 內原子地把 IN_PROGRESS 改成 COMPLETED：survey FOR UPDATE 只序列化
+        // public 之間，member submit 不拿該鎖，所以要靠列鎖＋狀態條件擋並發（count≠1 → 409）
+        await claimInProgressResponse(
+          tx,
+          { id: responseId, surveyId: survey.id },
+          {
             status: ResponseStatus.COMPLETED,
             idempotencyKey: idempotencyKey || undefined,
             payloadHash: currentPayloadHash || undefined,
@@ -299,7 +306,9 @@ export async function POST(
             percentage: evaluation.percentage,
             submittedAt: now,
           },
-        });
+          "此作答已提交或已排除，不可再提交"
+        );
+        response = await tx.response.findUniqueOrThrow({ where: { id: responseId } });
         // 清理舊答案再重新寫入
         await tx.answer.deleteMany({ where: { responseId: response.id } });
       } else {
@@ -435,6 +444,13 @@ export async function POST(
           }
         );
       }
+    }
+
+    if (error instanceof ResponseNotEditableError) {
+      return NextResponse.json(
+        { error: "RESPONSE_NOT_EDITABLE", message: error.message },
+        { status: 409 }
+      );
     }
 
     if (error instanceof DomainEligibilityError || error?.name === "DomainEligibilityError") {

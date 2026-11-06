@@ -12,9 +12,9 @@ import {
 } from "@/lib/dashboard-intelligence";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       return unauthorizedResponse("請先登入以檢視儀表板");
     }
 
-    const { id } = params;
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
     const timeRange = searchParams.get("timeRange") || "30d";
     const dateFromParam = searchParams.get("dateFrom");

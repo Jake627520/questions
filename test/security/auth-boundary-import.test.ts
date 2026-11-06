@@ -137,7 +137,7 @@ describe("Authentication Boundary & Parser Data Integrity Tests", () => {
       });
 
       const req = new NextRequest(`http://localhost:3000/api/surveys/import/${testImportId}`);
-      const res = await importDetailGET(req, { params: { importId: testImportId } });
+      const res = await importDetailGET(req, { params: Promise.resolve({ importId: testImportId }) });
       expect(res.status).toBe(401);
       const data = await res.json();
       expect(data.error).toBe("UNAUTHORIZED");
@@ -155,7 +155,7 @@ describe("Authentication Boundary & Parser Data Integrity Tests", () => {
       });
 
       const req = new NextRequest(`http://localhost:3000/api/surveys/import/${testImportId}/errors`);
-      const res = await importErrorCsvGET(req, { params: { importId: testImportId } });
+      const res = await importErrorCsvGET(req, { params: Promise.resolve({ importId: testImportId }) });
       expect(res.status).toBe(401);
       const data = await res.json();
       expect(data.error).toBe("UNAUTHORIZED");

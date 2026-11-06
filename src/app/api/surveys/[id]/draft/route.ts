@@ -7,11 +7,13 @@ import {
   unauthorizedResponse,
   isUserInOrganization,
   forbiddenResponse,
+  denyUnlessCanResumeResponse,
 } from "@/lib/auth";
+import { claimInProgressResponse, ResponseNotEditableError } from "@/lib/response-claim";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 登入成員的預覽/編輯草稿路徑；匿名填答走 /api/public/surveys/[publicToken]/draft。
@@ -20,7 +22,7 @@ export async function POST(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const responseId = body.responseId as string | undefined;
     const answersInput = (body.answers || []) as AnswerSubmission[];
@@ -53,7 +55,7 @@ export async function POST(
     if (responseId) {
       const existing = await db.response.findUnique({
         where: { id: responseId },
-        select: { surveyId: true },
+        select: { surveyId: true, status: true, createdById: true },
       });
       if (!existing || existing.surveyId !== survey.id) {
         return NextResponse.json(
@@ -61,12 +63,28 @@ export async function POST(
           { status: 404 }
         );
       }
+
+      // 建立者可續寫自己的草稿；其他人只有 EDITOR 以上能改，且都只能動 IN_PROGRESS
+      const denied = await denyUnlessCanResumeResponse(
+        auth.user.id,
+        survey.organizationId,
+        existing,
+        "此作答已提交或已排除，不可再暫存"
+      );
+      if (denied) return denied;
     }
 
     // 建立或更新草稿（ResponseStatus.IN_PROGRESS）
     const draftResponse = await db.$transaction(async (tx) => {
       let resp;
       if (responseId) {
+        // 在 transaction 內佔住該列，避免與並發的提交互相覆寫（狀態已變則 409）
+        await claimInProgressResponse(
+          tx,
+          { id: responseId, surveyId: survey.id },
+          { status: ResponseStatus.IN_PROGRESS },
+          "此作答已提交或已排除，不可再暫存"
+        );
         resp = await tx.response.findUnique({ where: { id: responseId } });
       }
 
@@ -76,6 +94,7 @@ export async function POST(
             surveyId: survey.id,
             version: survey.version,
             status: ResponseStatus.IN_PROGRESS,
+            createdById: auth.user.id,
             totalScore: null,
             maxScore: null,
             percentage: null,
@@ -133,6 +152,12 @@ export async function POST(
       savedCount: answersInput.length,
     });
   } catch (error: any) {
+    if (error instanceof ResponseNotEditableError) {
+      return NextResponse.json(
+        { error: "RESPONSE_NOT_EDITABLE", message: error.message },
+        { status: 409 }
+      );
+    }
     console.error("Error saving survey draft:", error);
     return NextResponse.json(
       { error: "暫存草稿失敗" },

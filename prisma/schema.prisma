@@ -59,6 +59,7 @@ model User {
   invitations         Invitation[]         @relation("InvitationCreator")
   passwordResetTokens PasswordResetToken[]
   reportExports       ReportExport[]
+  createdResponses    Response[]           @relation("ResponseCreator")
 
   @@map("users")
 }
@@ -282,10 +283,12 @@ model Response {
   totalScore      Float?         @map("total_score")
   maxScore        Float?         @map("max_score")
   percentage      Float?
+  createdById     String?        @map("created_by_id")
   createdAt       DateTime       @default(now()) @map("created_at")
 
-  survey  Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
-  answers Answer[]
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("ResponseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  answers   Answer[]
 
   @@unique([surveyId, idempotencyKey])
   @@index([surveyId])

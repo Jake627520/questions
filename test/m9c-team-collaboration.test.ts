@@ -165,7 +165,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
   describe("1. Multi-Tenant Member Isolation", () => {
     it("1. Org A 成員名冊只回傳 Org A 成員，不包含 Org B 成員", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/organizations/${orgA.id}`, tokenOwnerA);
-      const res = await orgDetailGET(req, { params: { id: orgA.id } });
+      const res = await orgDetailGET(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -178,7 +178,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
 
     it("2. Org B 成員名冊只回傳 Org B 成員", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/organizations/${orgB.id}`, tokenOwnerB);
-      const res = await orgDetailGET(req, { params: { id: orgB.id } });
+      const res = await orgDetailGET(req, { params: Promise.resolve({ id: orgB.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -190,7 +190,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
 
     it("3. Org A 使用者無法存取 Org B 成員名冊 (403 Forbidden)", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/organizations/${orgB.id}`, tokenOwnerA);
-      const res = await orgDetailGET(req, { params: { id: orgB.id } });
+      const res = await orgDetailGET(req, { params: Promise.resolve({ id: orgB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -201,7 +201,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "PATCH", body: { role: "VIEWER" } }
       );
       const res = await memberPATCH(req, {
-        params: { id: orgB.id, memberId: membershipAdminB.id },
+        params: Promise.resolve({ id: orgB.id, memberId: membershipAdminB.id }),
       });
       expect(res.status).toBe(403);
     });
@@ -213,7 +213,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "DELETE" }
       );
       const res = await memberDELETE(req, {
-        params: { id: orgB.id, memberId: membershipAdminB.id },
+        params: Promise.resolve({ id: orgB.id, memberId: membershipAdminB.id }),
       });
       expect(res.status).toBe(403);
     });
@@ -229,7 +229,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         }
       );
       const res = await memberPATCH(req, {
-        params: { id: orgB.id, memberId: membershipAdminB.id },
+        params: Promise.resolve({ id: orgB.id, memberId: membershipAdminB.id }),
       });
       expect(res.status).toBe(403);
     });
@@ -244,7 +244,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "PATCH", body: { role: "ADMIN" } }
       );
       const resPatch = await memberPATCH(reqPatch, {
-        params: { id: orgA.id, memberId: membershipEditorA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipEditorA.id }),
       });
       expect(resPatch.status).toBe(403);
 
@@ -255,7 +255,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "DELETE" }
       );
       const resDel = await memberDELETE(reqDel, {
-        params: { id: orgA.id, memberId: membershipEditorA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipEditorA.id }),
       });
       expect(resDel.status).toBe(403);
     });
@@ -268,7 +268,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "PATCH", body: { role: "EDITOR" } }
       );
       const resPatch = await memberPATCH(reqPatch, {
-        params: { id: orgA.id, memberId: membershipViewerA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipViewerA.id }),
       });
       expect(resPatch.status).toBe(403);
 
@@ -279,7 +279,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "DELETE" }
       );
       const resDel = await memberDELETE(reqDel, {
-        params: { id: orgA.id, memberId: membershipViewerA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipViewerA.id }),
       });
       expect(resDel.status).toBe(403);
     });
@@ -292,7 +292,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "PATCH", body: { role: "EDITOR" } }
       );
       const resPatch = await memberPATCH(reqPatch, {
-        params: { id: orgA.id, memberId: membershipViewerA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipViewerA.id }),
       });
       expect(resPatch.status).toBe(200);
 
@@ -306,7 +306,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "DELETE" }
       );
       const resDel = await memberDELETE(reqDel, {
-        params: { id: orgA.id, memberId: membershipEditorA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipEditorA.id }),
       });
       expect(resDel.status).toBe(200);
 
@@ -321,7 +321,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "PATCH", body: { role: "OWNER" } }
       );
       const resPatch = await memberPATCH(reqPatch, {
-        params: { id: orgA.id, memberId: membershipViewerA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipViewerA.id }),
       });
       expect(resPatch.status).toBe(200);
 
@@ -338,7 +338,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "PATCH", body: { role: "EDITOR" } }
       );
       const res = await memberPATCH(req, {
-        params: { id: orgA.id, memberId: membershipOwnerA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipOwnerA.id }),
       });
       expect(res.status).toBe(403);
       const data = await res.json();
@@ -352,7 +352,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "DELETE" }
       );
       const res = await memberDELETE(req, {
-        params: { id: orgA.id, memberId: membershipOwnerA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipOwnerA.id }),
       });
       expect(res.status).toBe(403);
       const data = await res.json();
@@ -367,7 +367,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "PATCH", body: { role: "ADMIN" } }
       );
       const resPatch = await memberPATCH(reqPatch, {
-        params: { id: orgA.id, memberId: membershipOwnerA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipOwnerA.id }),
       });
       expect(resPatch.status).toBe(400);
       const dataPatch = await resPatch.json();
@@ -380,7 +380,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "DELETE" }
       );
       const resDel = await memberDELETE(reqDel, {
-        params: { id: orgA.id, memberId: membershipOwnerA.id },
+        params: Promise.resolve({ id: orgA.id, memberId: membershipOwnerA.id }),
       });
       expect(resDel.status).toBe(400);
       const dataDel = await resDel.json();
@@ -396,7 +396,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         tokenAdminA,
         { method: "POST", body: { email: "m9c-newbie@alpha.com", role: "EDITOR" } }
       );
-      const resInvite = await invitePOST(reqInvite, { params: { id: orgA.id } });
+      const resInvite = await invitePOST(reqInvite, { params: Promise.resolve({ id: orgA.id }) });
       expect(resInvite.status).toBe(201);
       const inviteData = await resInvite.json();
 
@@ -405,7 +405,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         `http://localhost:3000/api/organizations/${orgA.id}/invitations`,
         tokenOwnerA
       );
-      const resGetA = await inviteGET(reqGetA, { params: { id: orgA.id } });
+      const resGetA = await inviteGET(reqGetA, { params: Promise.resolve({ id: orgA.id }) });
       expect(resGetA.status).toBe(200);
       const dataA = await resGetA.json();
       expect(dataA.invitations.length).toBe(1);
@@ -415,7 +415,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         `http://localhost:3000/api/organizations/${orgB.id}/invitations`,
         tokenOwnerB
       );
-      const resGetB = await inviteGET(reqGetB, { params: { id: orgB.id } });
+      const resGetB = await inviteGET(reqGetB, { params: Promise.resolve({ id: orgB.id }) });
       expect(resGetB.status).toBe(200);
       const dataB = await resGetB.json();
       expect(dataB.invitations.length).toBe(0);
@@ -427,7 +427,7 @@ describe("Phase M9-C: Team Collaboration & Ownership Security Suite", () => {
         { method: "POST" }
       );
       const resRevoke = await revokePOST(reqRevoke, {
-        params: { id: orgB.id, invitationId: inviteData.invitation.id },
+        params: Promise.resolve({ id: orgB.id, invitationId: inviteData.invitation.id }),
       });
       expect(resRevoke.status).toBe(404);
     });

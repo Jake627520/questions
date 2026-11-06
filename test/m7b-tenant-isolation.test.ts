@@ -328,7 +328,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
         body: JSON.stringify({ title: "[M7B-TEST] Alpha Survey Updated" }),
       });
-      const res = await surveyPATCH(req, { params: { id: surveyA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
     });
 
@@ -338,7 +338,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
         body: JSON.stringify({ title: "惡意竄改他人問卷" }),
       });
-      const res = await surveyPATCH(req, { params: { id: surveyB.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
       const data = await res.json();
       expect(data.error).toBe("FORBIDDEN");
@@ -350,7 +350,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenB}` },
         body: JSON.stringify({ title: "惡意竄改他人問卷" }),
       });
-      const res = await surveyPATCH(req, { params: { id: surveyA.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -358,7 +358,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyB.id}?mode=management`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await surveyGET(req, { params: { id: surveyB.id } });
+      const res = await surveyGET(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -371,7 +371,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyA.id}/responses`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await responsesGET(req, { params: { id: surveyA.id } });
+      const res = await responsesGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.responses.length).toBe(1);
@@ -382,7 +382,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyB.id}/responses`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await responsesGET(req, { params: { id: surveyB.id } });
+      const res = await responsesGET(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
       const data = await res.json();
       expect(data.error).toBe("FORBIDDEN");
@@ -392,7 +392,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyB.id}/responses/${responseB.id}`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await responseSingleGET(req, { params: { id: surveyB.id, responseId: responseB.id } });
+      const res = await responseSingleGET(req, { params: Promise.resolve({ id: surveyB.id, responseId: responseB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -404,7 +404,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
           headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
         }
       );
-      const res = await responseSingleDELETE(req, { params: { id: surveyB.id, responseId: responseB.id } });
+      const res = await responseSingleDELETE(req, { params: Promise.resolve({ id: surveyB.id, responseId: responseB.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -417,7 +417,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyA.id}/stats`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await statsGET(req, { params: { id: surveyA.id } });
+      const res = await statsGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
     });
 
@@ -425,7 +425,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyB.id}/stats`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await statsGET(req, { params: { id: surveyB.id } });
+      const res = await statsGET(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -433,7 +433,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyB.id}/export`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await exportGET(req, { params: { id: surveyB.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -447,7 +447,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
         method: "POST",
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await clonePOST(req, { params: { id: surveyA.id } });
+      const res = await clonePOST(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
     });
 
@@ -456,7 +456,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
         method: "POST",
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await clonePOST(req, { params: { id: surveyB.id } });
+      const res = await clonePOST(req, { params: Promise.resolve({ id: surveyB.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -511,14 +511,14 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
       const reqA = new NextRequest(`http://localhost:3000/api/surveys/import/${importAId}`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const resA = await importDetailGET(reqA, { params: { importId: importAId } });
+      const resA = await importDetailGET(reqA, { params: Promise.resolve({ importId: importAId }) });
       expect(resA.status).toBe(200);
 
       // 2. 跨租戶查詢 Import B
       const reqB = new NextRequest(`http://localhost:3000/api/surveys/import/${importBId}`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const resB = await importDetailGET(reqB, { params: { importId: importBId } });
+      const resB = await importDetailGET(reqB, { params: Promise.resolve({ importId: importBId }) });
       expect(resB.status).toBe(403);
     });
 
@@ -526,7 +526,7 @@ describe("Phase M7-B: Multi-Tenant Isolation & IDOR Protection 跨租戶隔離�
       const req = new NextRequest(`http://localhost:3000/api/surveys/import/${importBId}/errors`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenA}` },
       });
-      const res = await importErrorCsvGET(req, { params: { importId: importBId } });
+      const res = await importErrorCsvGET(req, { params: Promise.resolve({ importId: importBId }) });
       expect(res.status).toBe(403);
     });
   });

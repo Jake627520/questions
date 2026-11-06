@@ -281,12 +281,12 @@ describe("Phase M10-C: Dashboard Intelligence (Presentation & Orchestration Laye
 
       // 1. 同組織 VIEWER -> 200 OK
       const viewerReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/analytics/dashboard`, tokenViewerA);
-      const viewerRes = await dashboardGET(viewerReq, { params: { id: survey.id } });
+      const viewerRes = await dashboardGET(viewerReq, { params: Promise.resolve({ id: survey.id }) });
       expect(viewerRes.status).toBe(200);
 
       // 2. 跨租戶 Tenant B -> 403 Forbidden
       const tenantBReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/analytics/dashboard`, tokenTenantB);
-      const tenantBRes = await dashboardGET(tenantBReq, { params: { id: survey.id } });
+      const tenantBRes = await dashboardGET(tenantBReq, { params: Promise.resolve({ id: survey.id }) });
       expect(tenantBRes.status).toBe(403);
     });
   });
@@ -370,7 +370,7 @@ describe("Phase M10-C: Dashboard Intelligence (Presentation & Orchestration Laye
       }
 
       const req = makeAuthReq(`http://localhost/api/surveys/${survey.id}/analytics/dashboard?timeRange=30d`, tokenOwnerA);
-      const res = await dashboardGET(req, { params: { id: survey.id } });
+      const res = await dashboardGET(req, { params: Promise.resolve({ id: survey.id }) });
       expect(res.status).toBe(200);
 
       const json = await res.json();

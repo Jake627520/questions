@@ -17,7 +17,7 @@ import {
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -25,7 +25,7 @@ export async function GET(
       return unauthorizedResponse();
     }
 
-    const { id: organizationId } = params;
+    const { id: organizationId } = await params;
 
     // 驗證存取者是否為組織成員 (IDOR 防護)
     const membership = await getUserMembership(auth.user.id, organizationId);
@@ -94,7 +94,7 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -102,7 +102,7 @@ export async function PATCH(
       return unauthorizedResponse();
     }
 
-    const { id: organizationId } = params;
+    const { id: organizationId } = await params;
 
     // RBAC 檢查：僅限 OWNER 與 ADMIN
     const { allowed } = await hasRole(auth.user.id, organizationId, ROLES.MANAGERS);

@@ -298,31 +298,31 @@ describe("Phase M9-E.3: Filter-Aware Multi-Sheet Excel Export & Reporting Suite"
   describe("1. 安全與權限檢查 (Security & RBAC Boundaries)", () => {
     it("未登入呼叫匯出 API 應回傳 401 Unauthorized", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export`);
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
 
     it("非該組織成員呼叫匯出 API (跨組織 IDOR) 應回傳 403 Forbidden", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export`, tokenUserB);
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
 
     it("查詢不存在之問卷 ID 應回傳 404 Not Found", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/non-existent-survey-id/export`, tokenOwnerA);
-      const res = await exportGET(req, { params: { id: "non-existent-survey-id" } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: "non-existent-survey-id" }) });
       expect(res.status).toBe(404);
     });
 
     it("組織 VIEWER 匯出報表應被拒絕回傳 403 Forbidden (RBAC 角色隔離)", async () => {
       const reqViewer = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export`, tokenViewerA);
-      const resViewer = await exportGET(reqViewer, { params: { id: surveyA.id } });
+      const resViewer = await exportGET(reqViewer, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resViewer.status).toBe(403);
     });
 
     it("組織 OWNER 有權匯出報表 (200 OK)", async () => {
       const reqOwner = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export`, tokenOwnerA);
-      const resOwner = await exportGET(reqOwner, { params: { id: surveyA.id } });
+      const resOwner = await exportGET(reqOwner, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resOwner.status).toBe(200);
       expect(resOwner.headers.get("Content-Type")).toContain("spreadsheetml.sheet");
     });
@@ -331,7 +331,7 @@ describe("Phase M9-E.3: Filter-Aware Multi-Sheet Excel Export & Reporting Suite"
   describe("2. 多工作表結構與資料一致性 (Multi-Sheet Structure & Consistency)", () => {
     it("匯出檔案應包含 5 個完整 Sheet 且各 Sheet 結構正確", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export?status=ALL&timeRange=all`, tokenOwnerA);
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
 
       const arrayBuffer = await res.arrayBuffer();
@@ -385,7 +385,7 @@ describe("Phase M9-E.3: Filter-Aware Multi-Sheet Excel Export & Reporting Suite"
 
     it("套用 status=COMPLETED 篩選時僅匯出已完成之作答與對應統計", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export?status=COMPLETED&timeRange=all`, tokenOwnerA);
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
 
       const arrayBuffer = await res.arrayBuffer();
@@ -404,7 +404,7 @@ describe("Phase M9-E.3: Filter-Aware Multi-Sheet Excel Export & Reporting Suite"
 
     it("套用 status=IN_PROGRESS 篩選時僅匯出填寫中草稿", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export?status=IN_PROGRESS&timeRange=all`, tokenOwnerA);
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
 
       const arrayBuffer = await res.arrayBuffer();
@@ -418,7 +418,7 @@ describe("Phase M9-E.3: Filter-Aware Multi-Sheet Excel Export & Reporting Suite"
 
     it("時間範圍 today / 7d / 30d 參數能正確處理並產出有效 Excel", async () => {
       const reqToday = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export?timeRange=today`, tokenOwnerA);
-      const resToday = await exportGET(reqToday, { params: { id: surveyA.id } });
+      const resToday = await exportGET(reqToday, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resToday.status).toBe(200);
 
       const arrayBuffer = await resToday.arrayBuffer();
@@ -433,7 +433,7 @@ describe("Phase M9-E.3: Filter-Aware Multi-Sheet Excel Export & Reporting Suite"
         `http://localhost:3000/api/surveys/${surveyA.id}/export?timeRange=custom&dateFrom=${yesterday}&dateTo=${tomorrow}`,
         tokenOwnerA
       );
-      const resCustom = await exportGET(reqCustom, { params: { id: surveyA.id } });
+      const resCustom = await exportGET(reqCustom, { params: Promise.resolve({ id: surveyA.id }) });
       expect(resCustom.status).toBe(200);
 
       const arrayBuffer = await resCustom.arrayBuffer();
@@ -445,7 +445,7 @@ describe("Phase M9-E.3: Filter-Aware Multi-Sheet Excel Export & Reporting Suite"
 
     it("隱私與安全性：匿名問卷匯出不應包含填答者個人密碼、Session Token 或未授權個資", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export`, tokenOwnerA);
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
 
       const arrayBuffer = await res.arrayBuffer();
@@ -459,7 +459,7 @@ describe("Phase M9-E.3: Filter-Aware Multi-Sheet Excel Export & Reporting Suite"
 
     it("數值題統計在 Question Summary Sheet 應包含完整 Mean, Median, Range, SD", async () => {
       const req = makeAuthReq(`http://localhost:3000/api/surveys/${surveyA.id}/export?status=COMPLETED`, tokenOwnerA);
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
 
       const arrayBuffer = await res.arrayBuffer();

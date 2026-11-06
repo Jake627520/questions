@@ -8,11 +8,13 @@ import {
   unauthorizedResponse,
   isUserInOrganization,
   forbiddenResponse,
+  denyUnlessCanResumeResponse,
 } from "@/lib/auth";
+import { claimInProgressResponse, ResponseNotEditableError } from "@/lib/response-claim";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 此為登入成員的預覽/編輯填答路徑；匿名填答者一律走 /api/public/surveys/[publicToken]/submit。
@@ -21,7 +23,7 @@ export async function POST(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const responseId = body.responseId as string | undefined;
     const answersInput = (body.answers || []) as AnswerSubmission[];
@@ -58,7 +60,7 @@ export async function POST(
     if (responseId) {
       const existing = await db.response.findUnique({
         where: { id: responseId },
-        select: { surveyId: true },
+        select: { surveyId: true, status: true, createdById: true },
       });
       if (!existing || existing.surveyId !== survey.id) {
         return NextResponse.json(
@@ -66,6 +68,15 @@ export async function POST(
           { status: 404 }
         );
       }
+
+      // 建立者可提交自己的草稿；其他人只有 EDITOR 以上能改，且都只能動 IN_PROGRESS
+      const denied = await denyUnlessCanResumeResponse(
+        auth.user.id,
+        survey.organizationId,
+        existing,
+        "此作答已提交或已排除，不可再提交"
+      );
+      if (denied) return denied;
     }
 
     // 格式化 questions 物件給 survey-engine 運算
@@ -115,17 +126,20 @@ export async function POST(
       let response;
 
       if (responseId) {
-        // 更新現有草稿為正式提交
-        response = await tx.response.update({
-          where: { id: responseId },
-          data: {
+        // 在 transaction 內原子地把 IN_PROGRESS 改成 COMPLETED；並發請求已先改掉狀態則 409
+        await claimInProgressResponse(
+          tx,
+          { id: responseId, surveyId: survey.id },
+          {
             status: ResponseStatus.COMPLETED,
             totalScore: evaluation.totalScore,
             maxScore: evaluation.maxScore,
             percentage: evaluation.percentage,
             submittedAt: new Date(),
           },
-        });
+          "此作答已提交或已排除，不可再提交"
+        );
+        response = await tx.response.findUniqueOrThrow({ where: { id: responseId } });
         // 清理舊答案再重新寫入
         await tx.answer.deleteMany({ where: { responseId: response.id } });
       } else {
@@ -134,6 +148,7 @@ export async function POST(
             surveyId: survey.id,
             version: survey.version,
             status: ResponseStatus.COMPLETED,
+            createdById: auth.user.id,
             totalScore: evaluation.totalScore,
             maxScore: evaluation.maxScore,
             percentage: evaluation.percentage,
@@ -192,6 +207,12 @@ export async function POST(
       evaluation,
     });
   } catch (error: any) {
+    if (error instanceof ResponseNotEditableError) {
+      return NextResponse.json(
+        { error: "RESPONSE_NOT_EDITABLE", message: error.message },
+        { status: 409 }
+      );
+    }
     console.error("Error submitting survey response:", error);
     return NextResponse.json(
       { error: "提交問卷失敗" },

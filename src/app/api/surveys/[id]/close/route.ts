@@ -15,7 +15,7 @@ import {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -23,7 +23,7 @@ export async function POST(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const preCheck = await db.survey.findUnique({
       where: { id },
       select: { organizationId: true },
@@ -89,7 +89,7 @@ export async function POST(
 
     console.error("[Survey Close Error]:", error);
     return NextResponse.json(
-      { error: "關閉問卷失敗", details: error.message },
+      { error: "關閉問卷失敗" },
       { status: 500 }
     );
   }

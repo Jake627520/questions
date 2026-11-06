@@ -5,7 +5,7 @@ import { getCurrentUser, unauthorizedResponse, isUserInOrganization, forbiddenRe
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -13,7 +13,7 @@ export async function GET(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const survey = await db.survey.findUnique({
       where: { id },
       include: {
@@ -168,7 +168,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Error getting survey stats:", error);
     return NextResponse.json(
-      { error: "取得統計資料失敗", details: error.message },
+      { error: "取得統計資料失敗" },
       { status: 500 }
     );
   }

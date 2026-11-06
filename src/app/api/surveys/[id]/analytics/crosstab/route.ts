@@ -29,7 +29,7 @@ import {
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -37,7 +37,7 @@ export async function GET(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
 
     // 1. 禁止 3-Way 或多維交叉查詢

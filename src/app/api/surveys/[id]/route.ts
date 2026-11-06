@@ -17,10 +17,10 @@ import {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const survey = await db.survey.findUnique({
       where: { id },
       include: {
@@ -83,23 +83,41 @@ export async function GET(
 
     const { searchParams } = new URL(req.url);
     const isManagementView = searchParams.get("mode") === "management";
-    const auth = await getCurrentUser(req);
 
-    if (isManagementView) {
-      if (!auth) {
-        return unauthorizedResponse();
-      }
-      const isMember = await isUserInOrganization(auth.user.id, survey.organizationId);
-      if (!isMember) {
-        return forbiddenResponse("您無權查看此組織的問卷管理詳情");
-      }
+    // 本端點僅供組織成員使用 (管理頁與 /surveys/[id]/fill 預覽填答)；
+    // 匿名填答一律走 /api/public/surveys/[publicToken]。
+    const auth = await getCurrentUser(req);
+    if (!auth) {
+      return unauthorizedResponse();
+    }
+    const isMember = await isUserInOrganization(auth.user.id, survey.organizationId);
+    if (!isMember) {
+      return forbiddenResponse(
+        isManagementView ? "您無權查看此組織的問卷管理詳情" : "您無權查看此組織的問卷"
+      );
     }
 
-    return NextResponse.json({ survey });
+    if (isManagementView) {
+      return NextResponse.json({ survey });
+    }
+
+    // 填答檢視只回傳填答頁需要的欄位，不帶建立者 email、publicToken 與版本樹
+    const {
+      createdBy: _createdBy,
+      createdById: _createdById,
+      publicToken: _publicToken,
+      parentSurvey: _parentSurvey,
+      parentSurveyId: _parentSurveyId,
+      childVersions: _childVersions,
+      organization: _organization,
+      _count: _counts,
+      ...fillView
+    } = survey;
+    return NextResponse.json({ survey: fillView });
   } catch (error: any) {
     console.error("Error getting survey:", error);
     return NextResponse.json(
-      { error: "取得問卷失敗", details: error.message },
+      { error: "取得問卷失敗" },
       { status: 500 }
     );
   }
@@ -110,7 +128,7 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -118,7 +136,7 @@ export async function PATCH(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
 
     const existingSurvey = await db.survey.findUnique({
@@ -225,7 +243,7 @@ export async function PATCH(
 
     console.error("Error updating survey:", error);
     return NextResponse.json(
-      { error: "更新問卷失敗", details: error.message },
+      { error: "更新問卷失敗" },
       { status: 500 }
     );
   }
@@ -236,7 +254,7 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -244,7 +262,7 @@ export async function DELETE(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const existingSurvey = await db.survey.findUnique({
       where: { id },
       include: {
@@ -287,7 +305,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error("Error deleting survey:", error);
     return NextResponse.json(
-      { error: "刪除問卷失敗", details: error.message },
+      { error: "刪除問卷失敗" },
       { status: 500 }
     );
   }

@@ -140,7 +140,7 @@ describe("Phase M10-E: Report Delivery & Governance", () => {
       }
 
       const req = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/history?page=1&limit=2`, tokenEditorA);
-      const res = await reportHistoryGET(req, { params: { id: survey.id } });
+      const res = await reportHistoryGET(req, { params: Promise.resolve({ id: survey.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -189,7 +189,7 @@ describe("Phase M10-E: Report Delivery & Governance", () => {
 
       // 執行匯出
       const exportReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/export?format=xlsx`, tokenEditorA);
-      const exportRes = await reportExportGET(exportReq, { params: { id: survey.id } });
+      const exportRes = await reportExportGET(exportReq, { params: Promise.resolve({ id: survey.id }) });
       expect(exportRes.status).toBe(200);
 
       const exportId = exportRes.headers.get("X-Export-Id");
@@ -225,7 +225,7 @@ describe("Phase M10-E: Report Delivery & Governance", () => {
 
       // 請求 limit=500 -> 應自動限縮至 50
       const req = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/history?page=1&limit=500`, tokenEditorA);
-      const res = await reportHistoryGET(req, { params: { id: survey.id } });
+      const res = await reportHistoryGET(req, { params: Promise.resolve({ id: survey.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -260,7 +260,7 @@ describe("Phase M10-E: Report Delivery & Governance", () => {
 
       // 1. 嘗試下載過期產物 -> 410 Gone
       const dlReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/downloads/${expiredExport.id}`, tokenEditorA);
-      const dlRes = await reportDownloadGET(dlReq, { params: { id: survey.id, exportId: expiredExport.id } });
+      const dlRes = await reportDownloadGET(dlReq, { params: Promise.resolve({ id: survey.id, exportId: expiredExport.id }) });
       expect(dlRes.status).toBe(410);
 
       const dlData = await dlRes.json();
@@ -300,12 +300,12 @@ describe("Phase M10-E: Report Delivery & Governance", () => {
 
       // 1. Viewer 查閱歷史 -> 403
       const histReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/history`, tokenViewerA);
-      const histRes = await reportHistoryGET(histReq, { params: { id: survey.id } });
+      const histRes = await reportHistoryGET(histReq, { params: Promise.resolve({ id: survey.id }) });
       expect(histRes.status).toBe(403);
 
       // 2. Viewer 下載產物 -> 403
       const dlReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/downloads/${audit.id}`, tokenViewerA);
-      const dlRes = await reportDownloadGET(dlReq, { params: { id: survey.id, exportId: audit.id } });
+      const dlRes = await reportDownloadGET(dlReq, { params: Promise.resolve({ id: survey.id, exportId: audit.id }) });
       expect(dlRes.status).toBe(403);
     });
 
@@ -329,12 +329,12 @@ describe("Phase M10-E: Report Delivery & Governance", () => {
 
       // 1. Tenant B 存取 Tenant A 歷史清單 -> 403
       const crossHistReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/history`, tokenTenantB);
-      const crossHistRes = await reportHistoryGET(crossHistReq, { params: { id: survey.id } });
+      const crossHistRes = await reportHistoryGET(crossHistReq, { params: Promise.resolve({ id: survey.id }) });
       expect(crossHistRes.status).toBe(403);
 
       // 2. Tenant B 下載 Tenant A 產物 -> 403
       const crossDlReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/downloads/${audit.id}`, tokenTenantB);
-      const crossDlRes = await reportDownloadGET(crossDlReq, { params: { id: survey.id, exportId: audit.id } });
+      const crossDlRes = await reportDownloadGET(crossDlReq, { params: Promise.resolve({ id: survey.id, exportId: audit.id }) });
       expect(crossDlRes.status).toBe(403);
     });
   });
@@ -372,7 +372,7 @@ describe("Phase M10-E: Report Delivery & Governance", () => {
 
       // 執行下載
       const dlReq = makeAuthReq(`http://localhost/api/surveys/${survey.id}/reports/downloads/${audit.id}`, tokenEditorA);
-      const dlRes = await reportDownloadGET(dlReq, { params: { id: survey.id, exportId: audit.id } });
+      const dlRes = await reportDownloadGET(dlReq, { params: Promise.resolve({ id: survey.id, exportId: audit.id }) });
       expect(dlRes.status).toBe(200);
       expect(dlRes.headers.get("Content-Type")).toContain("text/csv");
       expect(dlRes.headers.get("X-Download-Count")).toBe("1");

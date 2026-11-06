@@ -11,9 +11,9 @@ import {
 } from "@/lib/auth";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       return unauthorizedResponse("請先登入以查看報告歷史");
     }
 
-    const { id } = params;
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));

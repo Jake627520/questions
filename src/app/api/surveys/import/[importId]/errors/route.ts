@@ -13,10 +13,10 @@ function escapeCsvField(field: unknown): string {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { importId: string } }
+  { params }: { params: Promise<{ importId: string }> }
 ) {
   try {
-    const { importId } = params;
+    const { importId } = await params;
 
     const record = await db.surveyImport.findUnique({
       where: { importId },
@@ -94,7 +94,6 @@ export async function GET(
       {
         success: false,
         error: "無法產出錯誤報告 CSV",
-        details: error?.message,
       },
       { status: 500 }
     );

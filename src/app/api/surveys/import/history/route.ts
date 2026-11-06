@@ -87,7 +87,6 @@ export async function GET(req: NextRequest) {
       {
         success: false,
         error: "無法取得匯入歷史紀錄",
-        details: error?.message,
       },
       { status: 500 }
     );

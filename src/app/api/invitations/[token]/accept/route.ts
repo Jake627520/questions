@@ -17,7 +17,7 @@ import {
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -25,7 +25,7 @@ export async function POST(
       return unauthorizedResponse("請先登入帳號以接受邀請");
     }
 
-    const { token } = params;
+    const { token } = await params;
     if (!token || typeof token !== "string") {
       return NextResponse.json(
         { error: "INVALID_TOKEN", message: "無效的邀請連結" },

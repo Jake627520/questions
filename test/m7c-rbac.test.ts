@@ -261,7 +261,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyMain.id}?mode=management`, {
           headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
         });
-        const res = await surveyGET(req, { params: { id: surveyMain.id } });
+        const res = await surveyGET(req, { params: Promise.resolve({ id: surveyMain.id }) });
         expect(res.status).toBe(200);
       }
     });
@@ -271,7 +271,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyMain.id}/responses`, {
           headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
         });
-        const res = await responsesGET(req, { params: { id: surveyMain.id } });
+        const res = await responsesGET(req, { params: Promise.resolve({ id: surveyMain.id }) });
         expect(res.status).toBe(200);
       }
     });
@@ -281,7 +281,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyMain.id}/stats`, {
           headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
         });
-        const res = await statsGET(req, { params: { id: surveyMain.id } });
+        const res = await statsGET(req, { params: Promise.resolve({ id: surveyMain.id }) });
         expect(res.status).toBe(200);
       }
     });
@@ -297,7 +297,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         const reqDetail = new NextRequest(`http://localhost:3000/api/surveys/import/${importMainId}`, {
           headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
         });
-        const resDetail = await importDetailGET(reqDetail, { params: { importId: importMainId } });
+        const resDetail = await importDetailGET(reqDetail, { params: Promise.resolve({ importId: importMainId }) });
         expect(resDetail.status).toBe(200);
       }
     });
@@ -312,7 +312,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyMain.id}/export`, {
           headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
         });
-        const res = await exportGET(req, { params: { id: surveyMain.id } });
+        const res = await exportGET(req, { params: Promise.resolve({ id: surveyMain.id }) });
         expect(res.status).toBe(200);
       }
     });
@@ -321,7 +321,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
       const req = new NextRequest(`http://localhost:3000/api/surveys/${surveyMain.id}/export`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenViewer}` },
       });
-      const res = await exportGET(req, { params: { id: surveyMain.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyMain.id }) });
       expect(res.status).toBe(403);
       const data = await res.json();
       expect(data.error).toBe("FORBIDDEN");
@@ -339,7 +339,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
           headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
           body: JSON.stringify({ title: `Updated by ${token.slice(0, 8)}` }),
         });
-        const res = await surveyPATCH(req, { params: { id: surveyMain.id } });
+        const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyMain.id }) });
         expect(res.status).toBe(200);
       }
     });
@@ -350,7 +350,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenViewer}` },
         body: JSON.stringify({ title: "Viewer Illegal Modification" }),
       });
-      const res = await surveyPATCH(req, { params: { id: surveyMain.id } });
+      const res = await surveyPATCH(req, { params: Promise.resolve({ id: surveyMain.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -360,7 +360,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
           method: "POST",
           headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
         });
-        const res = await clonePOST(req, { params: { id: surveyMain.id } });
+        const res = await clonePOST(req, { params: Promise.resolve({ id: surveyMain.id }) });
         expect(res.status).toBe(200);
       }
     });
@@ -370,7 +370,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         method: "POST",
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenViewer}` },
       });
-      const res = await clonePOST(req, { params: { id: surveyMain.id } });
+      const res = await clonePOST(req, { params: Promise.resolve({ id: surveyMain.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -445,7 +445,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         }
       );
       const resEditor = await responseSingleDELETE(reqEditor, {
-        params: { id: surveyMain.id, responseId: responseMain.id },
+        params: Promise.resolve({ id: surveyMain.id, responseId: responseMain.id }),
       });
       expect(resEditor.status).toBe(403);
 
@@ -458,7 +458,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         }
       );
       const resViewer = await responseSingleDELETE(reqViewer, {
-        params: { id: surveyMain.id, responseId: responseMain.id },
+        params: Promise.resolve({ id: surveyMain.id, responseId: responseMain.id }),
       });
       expect(resViewer.status).toBe(403);
     });
@@ -482,7 +482,7 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         }
       );
       const resAdmin = await responseSingleDELETE(reqAdmin, {
-        params: { id: surveyMain.id, responseId: tempResp.id },
+        params: Promise.resolve({ id: surveyMain.id, responseId: tempResp.id }),
       });
       expect(resAdmin.status).toBe(200);
     });
@@ -499,14 +499,14 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenCrossRole}` },
         body: JSON.stringify({ title: "Cross User Illegal Edit" }),
       });
-      const resPatchMain = await surveyPATCH(reqPatchMain, { params: { id: surveyMain.id } });
+      const resPatchMain = await surveyPATCH(reqPatchMain, { params: Promise.resolve({ id: surveyMain.id }) });
       expect(resPatchMain.status).toBe(403);
 
       // 2. User 對 Org Main (身分為 VIEWER) 嘗試 Export -> 預期 403
       const reqExportMain = new NextRequest(`http://localhost:3000/api/surveys/${surveyMain.id}/export`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenCrossRole}` },
       });
-      const resExportMain = await exportGET(reqExportMain, { params: { id: surveyMain.id } });
+      const resExportMain = await exportGET(reqExportMain, { params: Promise.resolve({ id: surveyMain.id }) });
       expect(resExportMain.status).toBe(403);
 
       // 3. User 對 Org Alt (身分為 ADMIN) 執行 PATCH -> 預期 200 OK
@@ -515,14 +515,14 @@ describe("Phase M7-C: RBAC Role-Based Access Control 測試", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenCrossRole}` },
         body: JSON.stringify({ title: "Alt Survey Legally Modified by Admin" }),
       });
-      const resPatchAlt = await surveyPATCH(reqPatchAlt, { params: { id: surveyAlt.id } });
+      const resPatchAlt = await surveyPATCH(reqPatchAlt, { params: Promise.resolve({ id: surveyAlt.id }) });
       expect(resPatchAlt.status).toBe(200);
 
       // 4. User 對 Org Alt (身分為 ADMIN) 執行 Export -> 預期 200 OK
       const reqExportAlt = new NextRequest(`http://localhost:3000/api/surveys/${surveyAlt.id}/export`, {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenCrossRole}` },
       });
-      const resExportAlt = await exportGET(reqExportAlt, { params: { id: surveyAlt.id } });
+      const resExportAlt = await exportGET(reqExportAlt, { params: Promise.resolve({ id: surveyAlt.id }) });
       expect(resExportAlt.status).toBe(200);
     });
   });

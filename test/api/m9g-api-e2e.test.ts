@@ -179,7 +179,7 @@ describe("Phase M9-G.7: Real API E2E & Full Pipeline Protection Suite", () => {
   describe("1. Full Pipeline RBAC & Tenant Isolation", () => {
     it("未登入請求 API 應回傳 401 Unauthorized", async () => {
       const req = createReq(`http://localhost/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGenderA.id}&colQuestionId=${qDeptA.id}`);
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
 
@@ -188,7 +188,7 @@ describe("Phase M9-G.7: Real API E2E & Full Pipeline Protection Suite", () => {
         `http://localhost/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGenderA.id}&colQuestionId=${qDeptA.id}`,
         tokenUserB
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -197,7 +197,7 @@ describe("Phase M9-G.7: Real API E2E & Full Pipeline Protection Suite", () => {
         `http://localhost/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGenderA.id}&colQuestionId=${qDeptA.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -209,7 +209,7 @@ describe("Phase M9-G.7: Real API E2E & Full Pipeline Protection Suite", () => {
         `http://localhost/api/surveys/${surveyA.id}/analytics/crosstab/export?rowQuestionId=${qGenderA.id}&colQuestionId=${qDeptA.id}`,
         tokenViewerA
       );
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -218,7 +218,7 @@ describe("Phase M9-G.7: Real API E2E & Full Pipeline Protection Suite", () => {
         `http://localhost/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGenderA.id}&colQuestionId=${qDeptA.id}`,
         tokenOwnerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -232,7 +232,7 @@ describe("Phase M9-G.7: Real API E2E & Full Pipeline Protection Suite", () => {
         `http://localhost/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGenderA.id}&colQuestionId=${qDeptA.id}`,
         tokenOwnerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       const json = await res.json();
 
       // 女性/設計 (0, 1) 原為 1 人，必須被遮蔽
@@ -254,7 +254,7 @@ describe("Phase M9-G.7: Real API E2E & Full Pipeline Protection Suite", () => {
         `http://localhost/api/surveys/${surveyA.id}/analytics/crosstab/export?rowQuestionId=${qGenderA.id}&colQuestionId=${qDeptA.id}`,
         tokenOwnerA
       );
-      const res = await exportGET(req, { params: { id: surveyA.id } });
+      const res = await exportGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toContain("spreadsheetml.sheet");
 

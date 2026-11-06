@@ -4,6 +4,7 @@ import { AnswerSubmission } from "@/lib/types";
 import { ResponseStatus, SurveyStatus } from "@prisma/client";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { extractClientIp } from "@/lib/submission-integrity";
+import { claimInProgressResponse, ResponseNotEditableError } from "@/lib/response-claim";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,10 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { publicToken: string } }
+  { params }: { params: Promise<{ publicToken: string }> }
 ) {
   try {
-    const { publicToken } = params;
+    const { publicToken } = await params;
 
     const limited = await enforceRateLimit({
       key: `draft:${publicToken}:${extractClientIp(req)}`,
@@ -57,6 +58,16 @@ export async function POST(
         if (resp && resp.surveyId !== survey.id) {
           throw new Error("無效的作答草稿記錄 (Cross-survey Draft ID Invalid)");
         }
+        // 已提交或已排除的作答不可被重開為草稿並清空答案；
+        // 在 transaction 內佔住該列，避免與並發的提交互相覆寫
+        if (resp) {
+          await claimInProgressResponse(
+            tx,
+            { id: resp.id, surveyId: survey.id },
+            { status: ResponseStatus.IN_PROGRESS },
+            "此作答已提交或已排除，不可再暫存"
+          );
+        }
       }
 
       if (!resp) {
@@ -68,12 +79,6 @@ export async function POST(
           },
         });
       } else {
-        await tx.response.update({
-          where: { id: resp.id },
-          data: {
-            status: ResponseStatus.IN_PROGRESS,
-          },
-        });
         await tx.answer.deleteMany({ where: { responseId: resp.id } });
       }
 
@@ -113,6 +118,12 @@ export async function POST(
       responseId: savedDraft.id,
     });
   } catch (error: any) {
+    if (error instanceof ResponseNotEditableError) {
+      return NextResponse.json(
+        { error: "RESPONSE_NOT_EDITABLE", message: error.message },
+        { status: 409 }
+      );
+    }
     console.error("[Public Survey Draft Error]:", error);
     return NextResponse.json(
       { error: "草稿儲存失敗" },

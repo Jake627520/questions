@@ -14,10 +14,10 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { publicToken: string } }
+  { params }: { params: Promise<{ publicToken: string }> }
 ) {
   try {
-    const { publicToken } = params;
+    const { publicToken } = await params;
 
     if (!publicToken || publicToken.trim().length === 0) {
       return NextResponse.json(

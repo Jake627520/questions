@@ -240,7 +240,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
       const req = new NextRequest(
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qSatisfaction.id}`
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(401);
     });
 
@@ -249,7 +249,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qSatisfaction.id}`,
         tokenUserB
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -258,7 +258,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
         `http://localhost:3000/api/surveys/non-existent-survey/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qSatisfaction.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: "non-existent-survey" } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: "non-existent-survey" }) });
       expect(res.status).toBe(404);
     });
 
@@ -268,7 +268,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
           `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qSatisfaction.id}`,
           token
         );
-        const res = await crosstabGET(req, { params: { id: surveyA.id } });
+        const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
         expect(res.status).toBe(200);
       }
     });
@@ -280,7 +280,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.error).toBe("MISSING_DIMENSIONS");
@@ -291,7 +291,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qGender.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.error).toBe("SAME_DIMENSION");
@@ -312,7 +312,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qOrgB.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.error).toBe("INVALID_QUESTIONS");
@@ -323,7 +323,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qSatisfaction.id}&questionC=${qMultiDept.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.error).toBe("INVALID_DIMENSIONS");
@@ -396,7 +396,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qSatisfaction.id}&status=COMPLETED`,
         tokenAdminA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -441,7 +441,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qMultiDept.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();
@@ -460,7 +460,7 @@ describe("Phase M9-F.4: Cross-tab API & Tenant RBAC Boundary Suite", () => {
         `http://localhost:3000/api/surveys/${surveyA.id}/analytics/crosstab?rowQuestionId=${qGender.id}&colQuestionId=${qSatisfaction.id}`,
         tokenViewerA
       );
-      const res = await crosstabGET(req, { params: { id: surveyA.id } });
+      const res = await crosstabGET(req, { params: Promise.resolve({ id: surveyA.id }) });
       expect(res.status).toBe(200);
 
       const data = await res.json();

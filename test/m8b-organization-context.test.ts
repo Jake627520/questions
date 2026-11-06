@@ -311,7 +311,7 @@ describe("Phase M8-B: Organization Context & Workspace Switcher Tests", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenAdminA}` },
       });
 
-      const res = await orgDetailGET(req, { params: { id: orgA.id } });
+      const res = await orgDetailGET(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(200);
       const data = await res.json();
 
@@ -333,7 +333,7 @@ describe("Phase M8-B: Organization Context & Workspace Switcher Tests", () => {
         headers: { Cookie: `${SESSION_COOKIE_NAME}=${tokenForeignB}` },
       });
 
-      const res = await orgDetailGET(req, { params: { id: orgA.id } });
+      const res = await orgDetailGET(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -349,7 +349,7 @@ describe("Phase M8-B: Organization Context & Workspace Switcher Tests", () => {
         body: JSON.stringify({ name: "Alpha 企業總部" }),
       });
 
-      const res = await orgDetailPATCH(req, { params: { id: orgA.id } });
+      const res = await orgDetailPATCH(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(200);
 
       const checkDb = await db.organization.findUnique({ where: { id: orgA.id } });
@@ -363,7 +363,7 @@ describe("Phase M8-B: Organization Context & Workspace Switcher Tests", () => {
         body: JSON.stringify({ name: "Alpha 研發中心" }),
       });
 
-      const res = await orgDetailPATCH(req, { params: { id: orgA.id } });
+      const res = await orgDetailPATCH(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(200);
 
       const checkDb = await db.organization.findUnique({ where: { id: orgA.id } });
@@ -377,7 +377,7 @@ describe("Phase M8-B: Organization Context & Workspace Switcher Tests", () => {
         body: JSON.stringify({ name: "Editor 竄改名稱" }),
       });
 
-      const res = await orgDetailPATCH(req, { params: { id: orgA.id } });
+      const res = await orgDetailPATCH(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -388,7 +388,7 @@ describe("Phase M8-B: Organization Context & Workspace Switcher Tests", () => {
         body: JSON.stringify({ name: "Viewer 竄改名稱" }),
       });
 
-      const res = await orgDetailPATCH(req, { params: { id: orgA.id } });
+      const res = await orgDetailPATCH(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(403);
     });
 
@@ -399,7 +399,7 @@ describe("Phase M8-B: Organization Context & Workspace Switcher Tests", () => {
         body: JSON.stringify({ name: "駭客竄改名稱" }),
       });
 
-      const res = await orgDetailPATCH(req, { params: { id: orgA.id } });
+      const res = await orgDetailPATCH(req, { params: Promise.resolve({ id: orgA.id }) });
       expect(res.status).toBe(403);
     });
   });
@@ -416,7 +416,7 @@ describe("Phase M8-B: Organization Context & Workspace Switcher Tests", () => {
         },
       });
 
-      const resGet = await surveyGET(reqGet, { params: { id: surveyB.id } });
+      const resGet = await surveyGET(reqGet, { params: Promise.resolve({ id: surveyB.id }) });
       expect(resGet.status).toBe(403);
 
       // 2. PATCH 竄改
@@ -427,7 +427,7 @@ describe("Phase M8-B: Organization Context & Workspace Switcher Tests", () => {
         },
         body: JSON.stringify({ title: "駭客竄改" }),
       });
-      const resPatch = await surveyPATCH(reqPatch, { params: { id: surveyB.id } });
+      const resPatch = await surveyPATCH(reqPatch, { params: Promise.resolve({ id: surveyB.id }) });
       expect(resPatch.status).toBe(403);
     });
   });

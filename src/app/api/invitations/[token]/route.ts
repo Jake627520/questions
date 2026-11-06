@@ -10,10 +10,10 @@ import { hashInvitationToken, maskEmail } from "@/lib/auth";
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    const { token } = params;
+    const { token } = await params;
     if (!token || typeof token !== "string") {
       return NextResponse.json(
         { error: "INVALID_TOKEN", message: "無效的邀請連結" },

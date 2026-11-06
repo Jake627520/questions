@@ -12,7 +12,7 @@ import {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await getCurrentUser(req);
@@ -20,7 +20,7 @@ export async function POST(
       return unauthorizedResponse();
     }
 
-    const { id } = params;
+    const { id } = await params;
     const sourceSurvey = await db.survey.findUnique({
       where: { id },
       include: {
@@ -117,7 +117,7 @@ export async function POST(
   } catch (error: any) {
     console.error("[Survey Duplicate Error]:", error);
     return NextResponse.json(
-      { error: "複製問卷失敗", details: error.message },
+      { error: "複製問卷失敗" },
       { status: 500 }
     );
   }

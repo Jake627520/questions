@@ -6,7 +6,6 @@ import { ImportStatus, QuestionType, SurveyStatus } from "@prisma/client";
 import { ImportResponse, ValidationIssue } from "@/types/surveyImport";
 import { getCurrentUser, getActiveOrganizationContext, isUserInOrganization, forbiddenResponse, unauthorizedResponse, hasRole, ROLES, generatePublicToken } from "@/lib/auth";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { extractClientIp } from "@/lib/submission-integrity";
 
 function generateImportId(): string {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -67,7 +66,58 @@ export async function POST(req: NextRequest) {
     const title = (formData.get("title") as string) || "匯入題庫問卷";
     const description = (formData.get("description") as string) || "";
     const explicitOrgId = ((formData.get("organizationId") as string) || "").trim();
-    const requestedOrgId = explicitOrgId || "default-org-id";
+    const status = SurveyStatus.DRAFT;
+    const parentSurveyId = (formData.get("parentSurveyId") as string) || null;
+
+    // 認證必須早於任何 DB 寫入 (含匯入稽核紀錄與 default organization upsert)
+    const auth = await getCurrentUser(req);
+    if (!auth) {
+      return unauthorizedResponse(
+        mode === "save"
+          ? "未授權存取，請先登入系統才能進行問卷匯入操作"
+          : "未授權存取，請先登入系統才能進行問卷預覽操作"
+      );
+    }
+    const limited = await enforceRateLimit({
+      key: `import:${auth.user.id}`,
+      ...RATE_LIMITS.import,
+    });
+    if (limited) return limited;
+
+    // 確保 default organization 存在
+    const defaultOrg = await db.organization.upsert({
+      where: { slug: "default" },
+      update: {},
+      create: {
+        id: "default-org-id",
+        name: "Default Workspace",
+        slug: "default",
+      },
+    });
+    // 前端未指定組織時，改用登入者的 active organization（未加入任何組織才退回 default），
+    // 否則不屬於 default 組織的使用者一律被下方的成員檢查擋成 403。
+    let organizationId =
+      explicitOrgId ||
+      (await getActiveOrganizationContext(req))?.organization.id ||
+      defaultOrg.id;
+
+    if (mode === "save") {
+      const { allowed, membership } = await hasRole(auth.user.id, organizationId, ROLES.EDITORS);
+      if (!membership) {
+        return forbiddenResponse("您非該組織成員，無權匯入問卷至該組織");
+      }
+      if (!allowed) {
+        return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能匯入問卷");
+      }
+    } else {
+      if (organizationId !== defaultOrg.id) {
+        const isMember = await isUserInOrganization(auth.user.id, organizationId);
+        if (!isMember) {
+          return forbiddenResponse("您非該組織成員，無權在此組織預覽問卷");
+        }
+      }
+    }
+
     const statusParam = (formData.get("status") as string) || "";
     if (statusParam.toUpperCase() === "PUBLISHED") {
       const issue: ValidationIssue = {
@@ -81,7 +131,7 @@ export async function POST(req: NextRequest) {
       if (mode === "save") {
         await recordFailedImport({
           importId,
-          organizationId: requestedOrgId,
+          organizationId,
           fileName: file?.name || "unknown.xlsx",
           fileSize: file?.size || 0,
           mode,
@@ -101,55 +151,6 @@ export async function POST(req: NextRequest) {
         } satisfies ImportResponse,
         { status: 400 }
       );
-    }
-    const status = SurveyStatus.DRAFT;
-    const parentSurveyId = (formData.get("parentSurveyId") as string) || null;
-
-    // 確保 default organization 存在
-    const defaultOrg = await db.organization.upsert({
-      where: { slug: "default" },
-      update: {},
-      create: {
-        id: "default-org-id",
-        name: "Default Workspace",
-        slug: "default",
-      },
-    });
-    const auth = await getCurrentUser(req);
-
-    // 前端未指定組織時，改用登入者的 active organization（未加入任何組織才退回 default），
-    // 否則不屬於 default 組織的使用者一律被下方的成員檢查擋成 403。
-    let organizationId =
-      explicitOrgId ||
-      (auth ? (await getActiveOrganizationContext(req))?.organization.id : undefined) ||
-      defaultOrg.id;
-    const limited = await enforceRateLimit({
-      key: `import:${auth?.user.id ?? extractClientIp(req)}`,
-      ...RATE_LIMITS.import,
-    });
-    if (limited) return limited;
-
-    if (mode === "save") {
-      if (!auth) {
-        return unauthorizedResponse("未授權存取，請先登入系統才能進行問卷匯入操作");
-      }
-      const { allowed, membership } = await hasRole(auth.user.id, organizationId, ROLES.EDITORS);
-      if (!membership) {
-        return forbiddenResponse("您非該組織成員，無權匯入問卷至該組織");
-      }
-      if (!allowed) {
-        return forbiddenResponse("您的角色權限不足，需要 EDITOR 以上權限才能匯入問卷");
-      }
-    } else {
-      if (!auth) {
-        return unauthorizedResponse("未授權存取，請先登入系統才能進行問卷預覽操作");
-      }
-      if (organizationId !== defaultOrg.id) {
-        const isMember = await isUserInOrganization(auth.user.id, organizationId);
-        if (!isMember) {
-          return forbiddenResponse("您非該組織成員，無權在此組織預覽問卷");
-        }
-      }
     }
 
     if (!file) {

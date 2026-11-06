@@ -12,9 +12,9 @@ import {
 import { generateExecutiveReportDTO } from "@/lib/report-engine";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       return unauthorizedResponse("請先登入以檢視報告");
     }
 
-    const { id } = params;
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
     const timeRange = searchParams.get("timeRange") || "all";
     const dateFromParam = searchParams.get("dateFrom");

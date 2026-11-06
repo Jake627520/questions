@@ -24,9 +24,9 @@ import { recordExportAudit } from "@/lib/report-governance";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     });
     if (limited) return limited;
 
-    const { id } = params;
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
     const format = (searchParams.get("format") || "xlsx").toLowerCase();
     const timeRange = searchParams.get("timeRange") || "all";
