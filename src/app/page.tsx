@@ -426,7 +426,7 @@ export default function HomePage() {
           <p className="text-sm text-slate-500 mt-1.5 max-w-md mx-auto">
             {searchQuery || statusFilter !== "ALL"
               ? "請嘗試更換篩選狀態或清除搜尋關鍵字"
-              : "立即透過 Excel 範本匯入題庫，或直接建立第一份問卷。"}
+              : "先下載 Excel 範本，照範例修改題目後上傳，即可建立第一份問卷。"}
           </p>
           <div className="mt-6 flex justify-center gap-3">
             {searchQuery || statusFilter !== "ALL" ? (
@@ -440,13 +440,22 @@ export default function HomePage() {
                 清除篩選條件
               </button>
             ) : (
-              <Link
-                href="/surveys/import"
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-xl shadow-xs transition"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>立即匯入 Excel 題庫</span>
-              </Link>
+              <>
+                <a
+                  href="/api/template"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm rounded-xl border border-slate-200 transition"
+                >
+                  <Download className="w-4 h-4 text-slate-500" />
+                  <span>下載 Excel 範本</span>
+                </a>
+                <Link
+                  href="/surveys/import"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-xl shadow-xs transition"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>立即匯入 Excel 題庫</span>
+                </Link>
+              </>
             )}
           </div>
         </div>
