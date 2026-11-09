@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { SurveyStatus } from "@prisma/client";
 
 import { checkSurveyCollectionEligibility } from "@/lib/survey-lifecycle";
+import { parseVisibilityRule } from "@/lib/survey-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -72,14 +73,7 @@ export async function GET(
 
     // 脫敏處理：僅回傳填答端必要之欄位
     const sanitizedQuestions = survey.questions.map((q) => {
-      let parsedRules: any = null;
-      if (q.visibilityRules) {
-        try {
-          parsedRules = typeof q.visibilityRules === "string" ? JSON.parse(q.visibilityRules) : q.visibilityRules;
-        } catch {
-          parsedRules = null;
-        }
-      }
+      const parsedRules = parseVisibilityRule(q.visibilityRules);
 
       return {
         id: q.id,

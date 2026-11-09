@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { SurveyStatus, ResponseStatus } from "@prisma/client";
-import { evaluateSurveySubmission } from "@/lib/survey-engine";
+import { evaluateSurveySubmission, parseVisibilityRule } from "@/lib/survey-engine";
 import {
   checkSurveyCollectionEligibility,
   DomainEligibilityError,
@@ -183,11 +183,7 @@ export async function POST(
       scoringEnabled: q.scoringEnabled,
       reverseScore: q.reverseScore,
       visibilityHint: q.visibilityHint,
-      visibilityRules: q.visibilityRules
-        ? typeof q.visibilityRules === "string"
-          ? JSON.parse(q.visibilityRules)
-          : q.visibilityRules
-        : null,
+      visibilityRules: parseVisibilityRule(q.visibilityRules),
       minSelections: q.minSelections,
       maxSelections: q.maxSelections,
       minValue: q.minValue,
