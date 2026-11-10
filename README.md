@@ -131,7 +131,7 @@
 ## 快速開始
 
 ### 環境需求
-- Node.js 20.x 或 22.x
+- Node.js 20.12+ 或 22.x（測試設定使用 `util.parseEnv`，需 Node 20.12 以上）
 - PostgreSQL 14+ (本地或容器化實例)
 - npm 10+
 
@@ -227,7 +227,7 @@ npm run build
 
 ## 技術棧
 
-- **核心框架**：[Next.js 14](https://nextjs.org/) (App Router, Server Components & Route Handlers)
+- **核心框架**：[Next.js 15](https://nextjs.org/) (App Router, Server Components & Route Handlers)
 - **程式語言**：[TypeScript 5.x](https://www.typescriptlang.org/)
 - **資料庫與 ORM**：[PostgreSQL](https://www.postgresql.org/) + [Prisma ORM 5.x](https://www.prisma.io/)
 - **試算表引擎**：[ExcelJS](https://github.com/exceljs/exceljs)
