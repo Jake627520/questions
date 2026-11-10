@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       await tx.session.deleteMany({
         where: {
           userId: user.id,
-          token: { not: auth.session.token },
+          tokenHash: { not: auth.session.tokenHash },
         },
       });
     });

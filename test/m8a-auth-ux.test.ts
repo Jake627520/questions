@@ -5,6 +5,7 @@ import {
   createSession,
   generateInvitationToken,
   hashInvitationToken,
+  hashSessionToken,
   getSafeReturnUrl,
   SESSION_COOKIE_NAME,
 } from "../src/lib/auth";
@@ -231,16 +232,17 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
     });
 
     it("9. 過期的 Session 存取應被拒絕 (401)", async () => {
-      const expiredSession = await db.session.create({
+      const rawToken = "m8a-expired-token-" + Date.now();
+      await db.session.create({
         data: {
           userId: testUser.id,
-          token: "m8a-expired-token-" + Date.now(),
+          tokenHash: hashSessionToken(rawToken),
           expiresAt: new Date(Date.now() - 60000), // 1 分鐘前過期
         },
       });
 
       const req = new NextRequest("http://localhost:3000/api/auth/me", {
-        headers: { Cookie: `${SESSION_COOKIE_NAME}=${expiredSession.token}` },
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${rawToken}` },
       });
       const res = await meGET(req);
       expect(res.status).toBe(401);
@@ -271,13 +273,13 @@ describe("Phase M8-A: Authentication UX & Account Center Tests", () => {
 
       // 驗證當前 Session 依然有效 (不突兀斷線)
       const checkCurrent = await db.session.findUnique({
-        where: { token: activeSessionToken },
+        where: { tokenHash: hashSessionToken(activeSessionToken) },
       });
-      expect(checkCurrent).toBeDefined();
+      expect(checkCurrent).not.toBeNull();
 
       // 驗證另一個裝置的 Session 已被刪除撤銷
       const checkSecond = await db.session.findUnique({
-        where: { token: secondSession.token },
+        where: { tokenHash: hashSessionToken(secondSession.token) },
       });
       expect(checkSecond).toBeNull();
 

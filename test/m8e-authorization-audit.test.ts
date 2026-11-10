@@ -4,6 +4,7 @@ import {
   hashPassword,
   createSession,
   generateSessionToken,
+  hashSessionToken,
   SESSION_COOKIE_NAME,
   generatePublicToken,
   generateInvitationToken,
@@ -666,15 +667,16 @@ describe("Phase M8-E: Authorization Boundary & Multi-Tenant Security Audit Suite
     });
 
     it("已過期之 Session Token 回傳 401 Unauthorized", async () => {
-      const expiredSession = await db.session.create({
+      const rawToken = generateSessionToken();
+      await db.session.create({
         data: {
           userId: userAlphaOwner.id,
-          token: generateSessionToken(),
+          tokenHash: hashSessionToken(rawToken),
           expiresAt: new Date(Date.now() - 10000), // 已過期
         },
       });
 
-      const req = makeAuthReq("http://localhost:3000/api/surveys", expiredSession.token);
+      const req = makeAuthReq("http://localhost:3000/api/surveys", rawToken);
       const res = await surveysGET(req);
       expect(res.status).toBe(401);
     });

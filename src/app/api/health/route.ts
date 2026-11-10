@@ -21,10 +21,7 @@ export async function GET() {
     // 執行輕量資料庫探測
     await db.$queryRawUnsafe("SELECT 1");
 
-    const mem = process.memoryUsage();
-    const heapUsedMB = Math.round((mem.heapUsed / 1024 / 1024) * 100) / 100;
-    const rssMB = Math.round((mem.rss / 1024 / 1024) * 100) / 100;
-
+    // 公開端點只回狀態與資料庫探測結果。heap/rss 留給平台監控，不對外。
     return NextResponse.json(
       {
         status: "HEALTHY",
@@ -34,10 +31,6 @@ export async function GET() {
         },
         uptimeSeconds,
         timestamp: now.toISOString(),
-        system: {
-          heapUsedMB,
-          rssMB,
-        },
       },
       { status: 200 }
     );
