@@ -3,7 +3,7 @@
 [![CI](https://github.com/Jake627520/questions/actions/workflows/ci.yml/badge.svg)](https://github.com/Jake627520/questions/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Release](https://img.shields.io/badge/Release-analytics--v1.0.0-emerald.svg)](https://github.com/Jake627520/questions/releases/tag/analytics-v1.0.0)
-[![Test Suites](https://img.shields.io/badge/Vitest-676%20tests-success.svg)](https://github.com/Jake627520/questions)
+[![Test Suites](https://img.shields.io/badge/Tests-500%2F500%20PASS-success.svg)](https://github.com/Jake627520/questions)
 
 專為企業、研究機構與組織設計的高可靠度問卷調查、生命週期治理與統計分析系統。
 
@@ -131,7 +131,7 @@
 ## 快速開始
 
 ### 環境需求
-- Node.js 20.12+ 或 22.x（測試設定使用 `util.parseEnv`，需 Node 20.12 以上）
+- Node.js 20.x 或 22.x
 - PostgreSQL 14+ (本地或容器化實例)
 - npm 10+
 
@@ -197,7 +197,7 @@ npm run typecheck
 # 執行 ESLint 語法與代碼風格檢查
 npm run lint
 
-# 執行全套 Vitest 自動化測試 (676 項單元與整合測試；需可連線的 PostgreSQL，`DATABASE_URL` 由 `.env` 或 `.env.test` 讀入)
+# 執行全套 Vitest 自動化測試 (558 項單元與整合測試)
 npm test
 
 # 執行 Playwright 瀏覽器端對端測試 (8 大 Golden Paths 驗收閘門)
@@ -227,7 +227,7 @@ npm run build
 
 ## 技術棧
 
-- **核心框架**：[Next.js 15](https://nextjs.org/) (App Router, Server Components & Route Handlers)
+- **核心框架**：[Next.js 14](https://nextjs.org/) (App Router, Server Components & Route Handlers)
 - **程式語言**：[TypeScript 5.x](https://www.typescriptlang.org/)
 - **資料庫與 ORM**：[PostgreSQL](https://www.postgresql.org/) + [Prisma ORM 5.x](https://www.prisma.io/)
 - **試算表引擎**：[ExcelJS](https://github.com/exceljs/exceljs)
