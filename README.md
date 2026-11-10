@@ -158,7 +158,7 @@
    npx prisma migrate deploy
    npx prisma generate
    ```
-   `npm run prisma:migrate` 是 `prisma migrate dev`（開發時產生 migration），不是套用既有 migration 的指令。
+   `npm run prisma:migrate` 是 `prisma migrate dev`（開發時產生 migration），不是套用既有 migration 的指令。本機 `npm run build` 不會跑 migration。
 
 4. **載入測試示範資料 (可選)**：
    ```bash
@@ -176,7 +176,7 @@
 
 ## Docker 容器化部署
 
-本專案提供生產環境 Multi-stage `Dockerfile` 與具備健康檢查的 `docker-compose.yml`。Postgres 發布在宿主機 `5432`，應用發布在 `3000`。映像檔的啟動指令是 `node server.js`（standalone 輸出），不是 `next start`。Compose 不會自動跑 migration。
+本專案提供生產環境 Multi-stage `Dockerfile` 與具備健康檢查的 `docker-compose.yml`。Postgres 發布在宿主機 `5432`，應用發布在 `3000`。映像檔的啟動指令是 `node server.js`（standalone 輸出），不是 `next start`。Compose 與 `docker build` 都不會自動跑 migration（`npm run build` 只在 `VERCEL_ENV=production` 時才會 migrate）。
 
 ```bash
 # 啟動 PostgreSQL 與 Next.js 應用服務
@@ -232,11 +232,49 @@ npm run test:e2e
 
 ---
 
+## Vercel 正式環境資料庫遷移
+
+`vercel.json` 的 `buildCommand` 與 `npm run build` 都是 `node scripts/vercel-build.mjs`。
+
+- **只有 `VERCEL_ENV` 剛好是 `production` 時**，建置會先執行 `prisma migrate deploy`，成功後才 `prisma generate` 與 `next build`。這包含合併到 `main` 之後的正式部署。
+- **Preview 不會 migrate。** Preview 可能共用正式環境的 `DATABASE_URL`。若在 preview 跑本 PR 的 migration，會在正式站還在跑舊程式時把 `sessions.token` 改名，正式站會立刻壞掉。
+- **本機 `npm run build`、GitHub Actions、Docker 不會 migrate**，因為它們沒有 `VERCEL_ENV=production`。CI 仍在測試步驟裡自己執行 `npx prisma migrate deploy`。Docker 要在宿主機另行 migrate（見上一節）。
+- 想在本機對某個資料庫套用 migration，用 `npx prisma migrate deploy`，或明確設定 `VERCEL_ENV=production npm run build`。
+
+`prisma migrate deploy` 失敗（含資料庫沒有 `_prisma_migrations`、錯誤碼 **P3005**）時，腳本以非 0 結束。它不會改跑 `prisma db push`，也不會加 `--accept-data-loss`。Vercel 會保留上一個成功的部署。
+
+合併這個變更後，正式建置若套用 `20261110120000_hash_session_tokens`，會**刪除全部 session**。既有登入失效，使用者必須重新登入。
+
+`schema.prisma` 只有 `url = env("DATABASE_URL")`，沒有 `directUrl`。Prisma 本身不會讀 `DIRECT_URL`。腳本在 migrate 那一步若發現環境裡已經有 `DIRECT_URL`、`DATABASE_URL_UNPOOLED` 或 `POSTGRES_URL_NON_POOLING`，會用那個非連線池網址跑 migration，`next build` 仍用原來的 `DATABASE_URL`。三個都沒有時，migration 用 `DATABASE_URL`。Neon 的 pooler 網址無法取得 Prisma 的 advisory lock，那種失敗一樣會讓建置失敗。
+
+若正式庫是用 `prisma db push` 建的、沒有 migration 歷史，第一次 `migrate deploy` 會 P3005。先用**非 pooler** 的網址執行 `npx prisma migrate status`。確認 `sessions` 仍有 `token` 欄（還沒跑本次 migration）、`responses.created_by_id` 已存在、且沒有 `_prisma_migrations` 之後，把已經在庫裡的 migration 標成已套用，**不要**標本次的 session migration：
+
+```bash
+npx prisma migrate resolve --applied 20260821000000_init_v0_2_0_baseline
+npx prisma migrate resolve --applied 20260821000001_add_multi_user_organization_membership
+npx prisma migrate resolve --applied 20260822015854_add_survey_import_audit
+npx prisma migrate resolve --applied 20260822063501_add_auth_sessions
+npx prisma migrate resolve --applied 20260822080001_add_survey_public_token
+npx prisma migrate resolve --applied 20260823121220_add_invitation_model
+npx prisma migrate resolve --applied 20260823123223_add_password_reset_token
+npx prisma migrate resolve --applied 20260824153000_add_survey_lifecycle_fields
+npx prisma migrate resolve --applied 20260825100000_add_response_integrity_fields
+npx prisma migrate resolve --applied 20260825120000_add_report_export_audit
+npx prisma migrate resolve --applied 20260920075345_add_rate_limit_counters
+npx prisma migrate resolve --applied 20261104120000_add_response_created_by
+```
+
+然後重新部署正式環境，讓建置自己套用 `20261110120000_hash_session_tokens`。若 `created_by_id` 或其他欄位其實不在正式庫，不要把對應的 migration 標成已套用，否則那段 SQL 會被跳過。
+
+若 Vercel 專案設定裡的 Build Command 被手動覆寫成 `next build`，`vercel.json` 的 `buildCommand` 不會生效，正式環境就不會 migrate。覆寫成 `npm run build` 則會走到同一支腳本。
+
+---
+
 ## 啟動已建置的應用
 
 `next.config.mjs` 設定 `output: "standalone"`。`next start` 會警告它不支援這個輸出，所以 `npm start` 不呼叫 `next start`。
 
-- **Vercel**：平台自己建置與提供服務，不使用 `npm start`，也不執行映像檔裡的 `node server.js`。
+- **Vercel**：平台建置時使用 `node scripts/vercel-build.mjs`（見上一節）。它不使用 `npm start`，也不執行映像檔裡的 `node server.js`。
 - **Docker**：`Dockerfile` 的 `CMD` 是 `node server.js`。standalone 目錄、`public` 與 `.next/static` 在映像檔組裝時複製進去。
 - **本機或 CI 的生產伺服器**（Playwright 的 `webServer` 也是這條）：
 

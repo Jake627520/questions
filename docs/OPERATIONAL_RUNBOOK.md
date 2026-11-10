@@ -10,7 +10,7 @@
 發布前確認：
 - [ ] 執行 `npm test`，確認 Vitest 全數通過（需 PostgreSQL）。
 - [ ] 執行 `npm run typecheck` 與 `npm run lint`，確認零警告與型別錯誤。
-- [ ] 檢查 `prisma/migrations/` 確認包含所有新版本的 SQL Migration。`20261110120000_hash_session_tokens` 會刪除全部既有 session，使用者必須重新登入。
+- [ ] 檢查 `prisma/migrations/` 確認包含所有新版本的 SQL Migration。Vercel 正式建置（`VERCEL_ENV=production`）會自動執行 `prisma migrate deploy`；preview、本機、CI、Docker 的 `npm run build` 不會。失敗時保留上一版部署，不會 `db push`。`20261110120000_hash_session_tokens` 會刪除全部既有 session，使用者必須重新登入。
 - [ ] 確認生產環境環境變數已設定：
   - `DATABASE_URL`
   - `CRON_SECRET`（未設定時 `/api/cron/cleanup` 回 503）
