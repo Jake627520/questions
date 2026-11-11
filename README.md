@@ -131,7 +131,7 @@
 ## 快速開始
 
 ### 環境需求
-- Node.js 20.x（CI 與 `Dockerfile` 使用 Node 20。本機 Node 22 可以跑這份程式，但不是 CI 鎖定的版本）
+- Node.js 22.x（CI、`Dockerfile` 與 `package.json` 的 `engines` 都使用 Node 22）
 - PostgreSQL 15（`docker-compose.yml` 與 CI 都是 `postgres:15-alpine`）
 - npm 10+
 
@@ -298,7 +298,7 @@ npm start
 - **資料驗證**：[Zod 4.x](https://zod.dev/)
 - **測試框架**：[Vitest 5.x](https://vitest.dev/) 與 [Playwright](https://playwright.dev/)
 - **容器化**：[Docker](https://www.docker.com/) & Docker Compose
-- **持續整合**：[GitHub Actions](https://github.com/features/actions)（`.github/workflows/ci.yml`：Node 20、Postgres 15、lint、typecheck、Vitest、build、Playwright）
+- **持續整合**：[GitHub Actions](https://github.com/features/actions)（`.github/workflows/ci.yml`：Node 22、Postgres 15、lint、typecheck、Vitest、build、Playwright）
 
 ---
 
