@@ -5,6 +5,7 @@ import {
   createSession,
   destroySession,
   generatePublicToken,
+  hashSessionToken,
   SESSION_COOKIE_NAME,
 } from "../src/lib/auth";
 import { GET as authMeGET } from "../src/app/api/auth/me/route";
@@ -436,24 +437,25 @@ describe("Phase M7-E: Full Security Regression & Attack Simulation Suite (攻擊
     });
 
     it("過期的 Session 存取管理端應回傳 401 並自動清除過期 Session", async () => {
-      // 建立已過期的 Session
-      const expiredSession = await db.session.create({
+      // 建立已過期的 Session。Cookie 帶明文，資料庫只存雜湊。
+      const rawToken = "expired-test-token-" + Date.now();
+      await db.session.create({
         data: {
           userId: userAdminA.id,
-          token: "expired-test-token-" + Date.now(),
+          tokenHash: hashSessionToken(rawToken),
           expiresAt: new Date(Date.now() - 10000), // 10 秒前已過期
         },
       });
 
       const req = new NextRequest("http://localhost:3000/api/surveys", {
-        headers: { Cookie: `${SESSION_COOKIE_NAME}=${expiredSession.token}` },
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${rawToken}` },
       });
       const res = await surveysGET(req);
       expect(res.status).toBe(401);
 
       // 驗證 DB 內部該過期 Session 已被自動清理
       const checkDb = await db.session.findUnique({
-        where: { token: expiredSession.token },
+        where: { tokenHash: hashSessionToken(rawToken) },
       });
       expect(checkDb).toBeNull();
     });

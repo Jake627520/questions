@@ -117,7 +117,9 @@ describe("Phase M11: Production Readiness & Operational Governance Audit", () =>
       expect(json.checks.database).toBe("UP");
       expect(json.checks.service).toBe("UP");
       expect(typeof json.uptimeSeconds).toBe("number");
-      expect(typeof json.system.heapUsedMB).toBe("number");
+      expect(json.system).toBeUndefined();
+      expect(json.heapUsedMB).toBeUndefined();
+      expect(json.rssMB).toBeUndefined();
 
       // 嚴格 Zero-Leak 斷言
       const resStr = JSON.stringify(json);
@@ -126,6 +128,8 @@ describe("Phase M11: Production Readiness & Operational Governance Audit", () =>
       expect(resStr).not.toContain("5432");
       expect(resStr).not.toContain("survey_db");
       expect(resStr).not.toContain("stack");
+      expect(resStr).not.toContain("heapUsed");
+      expect(resStr).not.toContain("rss");
     });
 
     it("當資料庫連線中斷時，/api/health 回傳 503 Service Unavailable 且隱藏例外細節", async () => {

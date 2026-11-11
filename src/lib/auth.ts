@@ -76,31 +76,39 @@ export async function verifyPassword(password: string, storedHash: string): Prom
 }
 
 // =========================================================================
-// 2. Session Management (256-bit randomBytes + DB-backed Session)
+// 2. Session Management (256-bit randomBytes + DB stores SHA-256 only)
 // =========================================================================
 
 /**
  * 產生 256-bit (32 bytes) CSPRNG 高熵 Session Token (Hex 編碼)
+ * 這個原始值只放在 Cookie。資料庫不存明文。
  */
 export function generateSessionToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
 /**
- * 產生 256-bit 隨機 Session Token 並存入資料庫
+ * SHA-256 hex of the raw session token. Same construction as invitation
+ * and password-reset token hashes.
+ */
+export function hashSessionToken(rawToken: string): string {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
+
+/**
+ * 產生 256-bit 隨機 Session Token。資料庫只寫入雜湊，回傳值的 token 是明文。
  */
 export async function createSession(
   userId: string,
   durationDays = DEFAULT_SESSION_DURATION_DAYS
 ): Promise<{ session: Session; token: string }> {
-  // 生成高熵 256-bit (32 bytes) 隨機字串
   const token = generateSessionToken();
   const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
 
   const session = await db.session.create({
     data: {
       userId,
-      token,
+      tokenHash: hashSessionToken(token),
       expiresAt,
     },
   });
@@ -109,7 +117,7 @@ export async function createSession(
 }
 
 /**
- * 驗證 Session Token，並檢查過期時間
+ * 驗證 Session Token，並檢查過期時間。以雜湊查詢，不比對明文。
  */
 export async function validateSession(token: string): Promise<AuthContext | null> {
   if (!token || typeof token !== "string") {
@@ -117,7 +125,7 @@ export async function validateSession(token: string): Promise<AuthContext | null
   }
 
   const session = await db.session.findUnique({
-    where: { token },
+    where: { tokenHash: hashSessionToken(token) },
     include: { user: true },
   });
 
@@ -141,7 +149,7 @@ export async function validateSession(token: string): Promise<AuthContext | null
     session: {
       id: session.id,
       userId: session.userId,
-      token: session.token,
+      tokenHash: session.tokenHash,
       expiresAt: session.expiresAt,
       createdAt: session.createdAt,
     },
@@ -149,12 +157,12 @@ export async function validateSession(token: string): Promise<AuthContext | null
 }
 
 /**
- * 登出 / 註銷 Session
+ * 登出 / 註銷 Session。參數是 Cookie 裡的明文 token。
  */
 export async function destroySession(token: string): Promise<void> {
   if (!token) return;
   try {
-    await db.session.delete({ where: { token } });
+    await db.session.delete({ where: { tokenHash: hashSessionToken(token) } });
   } catch {
     // Session 不存在或已被刪除時正常略過
   }

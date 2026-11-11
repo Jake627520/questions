@@ -3,12 +3,11 @@
 [![CI](https://github.com/Jake627520/questions/actions/workflows/ci.yml/badge.svg)](https://github.com/Jake627520/questions/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Release](https://img.shields.io/badge/Release-analytics--v1.0.0-emerald.svg)](https://github.com/Jake627520/questions/releases/tag/analytics-v1.0.0)
-[![Test Suites](https://img.shields.io/badge/Tests-500%2F500%20PASS-success.svg)](https://github.com/Jake627520/questions)
 
 專為企業、研究機構與組織設計的高可靠度問卷調查、生命週期治理與統計分析系統。
 
 - **線上正式環境**：[https://questions-survey-system1.vercel.app/](https://questions-survey-system1.vercel.app/)
-- **目前版本**：`v1.0.0`
+- **套件版本**：`0.2.0`（`package.json`）。變更紀錄最新章節是 `1.0.1`（[CHANGELOG.md](./CHANGELOG.md)）。分析引擎契約標籤是 [`analytics-v1.0.0`](https://github.com/Jake627520/questions/releases/tag/analytics-v1.0.0)。這三個編號沒有對齊，以各來源為準，不要把其中一個當成唯一的「目前版本」。
 - **核心定位**：以「原始答案 (Raw Answers)」為核心資產，結合「純函數統計分析引擎」與「嚴格隱私抑制（$k=5$ Anonymity）」，實現填答、治理與分析全鏈路閉環。
 
 ---
@@ -70,9 +69,9 @@
   - **自由度與 p-value**：$df = (r - 1)(c - 1)$，採用高精度 Lanczos 伽瑪近似與不完全伽瑪函數計算卡方分佈累積機率。
   - **Cramér's V 關聯效應值**：
     $$V = \sqrt{\frac{\chi^2}{N \times \min(r - 1, c - 1)}}$$
-- **$k$-匿名性與差分隱私防護 ($k$-Anonymity Cell Suppression)**：
-  - **一級抑制 (Primary Suppression)**：細格次數 $0 < n < 5$ 時自動遮蔽為 `null`（標記 `isSuppressed: true`）。
-  - **二級/互補抑制 (Secondary/Complementary Suppression)**：若單列或單行僅有 1 個被抑制細格，系統自動遮蔽該列/行的次小細格，防止攻擊者透過邊際總和反推真實次數。
+- **$k$-匿名性與小樣本細格抑制 ($k$-Anonymity Cell Suppression)**：預設門檻 $k=5$（`minCellSize`）。這不是差分隱私，不會對次數加噪。
+  - **一級抑制 (Primary Suppression)**：細格次數 $0 < n < 5$ 時，`count` 與百分比改為 `null`、`isSuppressed: true`，顯示值為 `<5`。次數為 0 的細格保留真實 0。
+  - **二級/互補抑制 (Secondary/Complementary Suppression)**：若單列或單行僅有 1 個被抑制細格，再遮蔽該列/行最小的正數細格（顯示 `—`），防止透過邊際總和反推真實次數。
   - **防範差分攻擊 (Differencing Attack Resistance)**：已通過多維度篩選、滑動時間窗口與聯立線性方程求解之抗逆推驗證。
 - **跨端呈現一致性 (Cross-Presentation Consistency)**：
   - 統一以 `ProtectedCrossTabResult` DTO 輸出至 Web 互動熱圖、REST API 及 Excel 匯出檔，確保三端數值與遮蔽狀態完全一致。
@@ -98,9 +97,10 @@
   - `EDITOR`：問卷編輯者，可建立、編輯、發布問卷與匯出分析報表。
   - `VIEWER`：唯讀檢視者，僅可檢視問卷列表與分析看板。
 - **安全基礎設施**：
-  - CSPRNG 高熵 Session Token，HttpOnly/Secure/SameSite Cookie 儲存。
+  - CSPRNG 256-bit Session Token 只放在 HttpOnly / Secure（production）/ SameSite=Lax Cookie。資料庫只存該 token 的 SHA-256。部署 `20261110120000_hash_session_tokens` 會清掉既有 session，使用者必須重新登入。
   - `crypto.scrypt` 加上獨立 16-byte Salt 雜湊，時序安全比較 (`timingSafeEqual`)。
   - 安全邀請連結與密碼重設 Token（SHA-256 雜湊儲存、過期與單次使用保護）。
+  - 回應標頭：`Content-Security-Policy`、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy`、`Permissions-Policy`（見 `next.config.mjs`）。Script CSP 保留 `'unsafe-inline'`，以相容 Next 內嵌腳本與主題啟動腳本。
 
 ### 4. Excel 雙向題庫維護與原子稽核 (Excel Import & Audit)
 - **結構化雙 Sheet 格式**：透過 `questions` 與 `choices` 工作表批量維護題型、必填、條件跳題與選項分數。
@@ -124,15 +124,15 @@
 | `info` | 說明文字塊 | 無需作答之段落提示與章節引言 |
 
 - **直覺條件跳題語法**：支援中文選項比對（如 `SHOW IF Q1 in [滿意, 非常滿意]`、`HIDE IF Q2 = 否`），內建拓撲圖檢測演算法防範循環相依。
-- **草稿暫存與恢復**：填答者可中途暫存作答進度，透過專屬 Token 隨時跨裝置接續填寫。
+- **草稿暫存與恢復**：填答者可中途暫存。公開問卷以 `publicToken` 識別問卷，以 `responseId` 接續同一份 `IN_PROGRESS` 草稿。
 
 ---
 
 ## 快速開始
 
 ### 環境需求
-- Node.js 20.x 或 22.x
-- PostgreSQL 14+ (本地或容器化實例)
+- Node.js 20.x（CI 與 `Dockerfile` 使用 Node 20。本機 Node 22 可以跑這份程式，但不是 CI 鎖定的版本）
+- PostgreSQL 15（`docker-compose.yml` 與 CI 都是 `postgres:15-alpine`）
 - npm 10+
 
 ### 本地開發建置
@@ -148,21 +148,23 @@
    ```bash
    cp .env.example .env
    ```
-   在 `.env` 中設定 PostgreSQL 資料庫連線：
-   ```env
-   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/survey_db?schema=public"
-   ```
+   `.env.example` 的 `DATABASE_URL` 與 `docker-compose.yml`、CI 相同：使用者 `postgres`、密碼 `postgrespassword`、資料庫 `survey_db`、埠 `5432`。另外還有：
+   - `CRON_SECRET`：`POST /api/cron/cleanup` 沒有這個值會直接 503。
+   - `NEXT_PUBLIC_APP_URL`：canonical / Open Graph 的來源。沒設時程式預設為正式站網址。
+   - `RESPONSE_IP_HMAC_SECRET`、`TRUSTED_PROXY_HOPS`：選用，說明寫在 `.env.example`。
 
 3. **執行資料庫遷移與用戶端生成**：
    ```bash
    npx prisma migrate deploy
    npx prisma generate
    ```
+   `npm run prisma:migrate` 是 `prisma migrate dev`（開發時產生 migration），不是套用既有 migration 的指令。本機 `npm run build` 不會跑 migration。
 
 4. **載入測試示範資料 (可選)**：
    ```bash
-   npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/seed.ts
+   npm run prisma:seed
    ```
+   這會執行 `tsx prisma/seed.ts`，寫入一份示範問卷。它不會建立可登入的使用者。
 
 5. **啟動本機開發伺服器**：
    ```bash
@@ -174,11 +176,14 @@
 
 ## Docker 容器化部署
 
-本專案提供生產環境 Multi-stage `Dockerfile` 與具備健康檢查的 `docker-compose.yml`：
+本專案提供生產環境 Multi-stage `Dockerfile` 與具備健康檢查的 `docker-compose.yml`。Postgres 發布在宿主機 `5432`，應用發布在 `3000`。映像檔的啟動指令是 `node server.js`（standalone 輸出），不是 `next start`。Compose 與 `docker build` 都不會自動跑 migration（`npm run build` 只在 `VERCEL_ENV=production` 時才會 migrate）。
 
 ```bash
-# 啟動 PostgreSQL 資料庫與 Next.js 應用服務
+# 啟動 PostgreSQL 與 Next.js 應用服務
 docker compose up -d
+
+# 在宿主機套用 migration（密碼與 compose / CI 相同）
+DATABASE_URL="postgresql://postgres:postgrespassword@localhost:5432/survey_db?schema=public" npx prisma migrate deploy
 
 # 查看容器狀態
 docker compose ps
@@ -197,14 +202,16 @@ npm run typecheck
 # 執行 ESLint 語法與代碼風格檢查
 npm run lint
 
-# 執行全套 Vitest 自動化測試 (558 項單元與整合測試)
+# 執行全套 Vitest（需要已遷移的 PostgreSQL；案例數以本次輸出為準，文件不寫死）
 npm test
 
-# 執行 Playwright 瀏覽器端對端測試 (8 大 Golden Paths 驗收閘門)
-npm run test:e2e
-
-# 執行生產環境編譯建置
+# 執行生產環境編譯建置（E2E 的 webServer 會執行 npm start，必須先有 standalone 輸出）
 npm run build
+
+# 執行 Playwright 瀏覽器端對端測試 (8 大 Golden Paths 驗收閘門)
+# 需要 DATABASE_URL、已 migrate 的資料庫，以及 Chromium
+npx playwright install --with-deps chromium
+npm run test:e2e
 ```
 
 ### 測試覆蓋範疇：
@@ -225,16 +232,73 @@ npm run build
 
 ---
 
+## Vercel 正式環境資料庫遷移
+
+`vercel.json` 的 `buildCommand` 與 `npm run build` 都是 `node scripts/vercel-build.mjs`。
+
+- **只有 `VERCEL_ENV` 剛好是 `production` 時**，建置會先執行 `prisma migrate deploy`，成功後才 `prisma generate` 與 `next build`。這包含合併到 `main` 之後的正式部署。
+- **Preview 不會 migrate。** Preview 可能共用正式環境的 `DATABASE_URL`。若在 preview 跑本 PR 的 migration，會在正式站還在跑舊程式時把 `sessions.token` 改名，正式站會立刻壞掉。
+- **本機 `npm run build`、GitHub Actions、Docker 不會 migrate**，因為它們沒有 `VERCEL_ENV=production`。CI 仍在測試步驟裡自己執行 `npx prisma migrate deploy`。Docker 要在宿主機另行 migrate（見上一節）。
+- 想在本機對某個資料庫套用 migration，用 `npx prisma migrate deploy`，或明確設定 `VERCEL_ENV=production npm run build`。
+
+`prisma migrate deploy` 失敗（含資料庫沒有 `_prisma_migrations`、錯誤碼 **P3005**）時，腳本以非 0 結束。它不會改跑 `prisma db push`，也不會加 `--accept-data-loss`。Vercel 會保留上一個成功的部署。
+
+合併這個變更後，正式建置若套用 `20261110120000_hash_session_tokens`，會**刪除全部 session**。既有登入失效，使用者必須重新登入。
+
+`schema.prisma` 只有 `url = env("DATABASE_URL")`，沒有 `directUrl`。Prisma 本身不會讀 `DIRECT_URL`。腳本在 migrate 那一步若發現環境裡已經有 `DIRECT_URL`、`DATABASE_URL_UNPOOLED` 或 `POSTGRES_URL_NON_POOLING`，會用那個非連線池網址跑 migration，`next build` 仍用原來的 `DATABASE_URL`。三個都沒有時，migration 用 `DATABASE_URL`。Neon 的 pooler 網址無法取得 Prisma 的 advisory lock，那種失敗一樣會讓建置失敗。
+
+若正式庫是用 `prisma db push` 建的、沒有 migration 歷史，第一次 `migrate deploy` 會 P3005。先用**非 pooler** 的網址執行 `npx prisma migrate status`。確認 `sessions` 仍有 `token` 欄（還沒跑本次 migration）、`responses.created_by_id` 已存在、且沒有 `_prisma_migrations` 之後，把已經在庫裡的 migration 標成已套用，**不要**標本次的 session migration：
+
+```bash
+npx prisma migrate resolve --applied 20260821000000_init_v0_2_0_baseline
+npx prisma migrate resolve --applied 20260821000001_add_multi_user_organization_membership
+npx prisma migrate resolve --applied 20260822015854_add_survey_import_audit
+npx prisma migrate resolve --applied 20260822063501_add_auth_sessions
+npx prisma migrate resolve --applied 20260822080001_add_survey_public_token
+npx prisma migrate resolve --applied 20260823121220_add_invitation_model
+npx prisma migrate resolve --applied 20260823123223_add_password_reset_token
+npx prisma migrate resolve --applied 20260824153000_add_survey_lifecycle_fields
+npx prisma migrate resolve --applied 20260825100000_add_response_integrity_fields
+npx prisma migrate resolve --applied 20260825120000_add_report_export_audit
+npx prisma migrate resolve --applied 20260920075345_add_rate_limit_counters
+npx prisma migrate resolve --applied 20261104120000_add_response_created_by
+```
+
+然後重新部署正式環境，讓建置自己套用 `20261110120000_hash_session_tokens`。若 `created_by_id` 或其他欄位其實不在正式庫，不要把對應的 migration 標成已套用，否則那段 SQL 會被跳過。
+
+若 Vercel 專案設定裡的 Build Command 被手動覆寫成 `next build`，`vercel.json` 的 `buildCommand` 不會生效，正式環境就不會 migrate。覆寫成 `npm run build` 則會走到同一支腳本。
+
+---
+
+## 啟動已建置的應用
+
+`next.config.mjs` 設定 `output: "standalone"`。`next start` 會警告它不支援這個輸出，所以 `npm start` 不呼叫 `next start`。
+
+- **Vercel**：平台建置時使用 `node scripts/vercel-build.mjs`（見上一節）。它不使用 `npm start`，也不執行映像檔裡的 `node server.js`。
+- **Docker**：`Dockerfile` 的 `CMD` 是 `node server.js`。standalone 目錄、`public` 與 `.next/static` 在映像檔組裝時複製進去。
+- **本機或 CI 的生產伺服器**（Playwright 的 `webServer` 也是這條）：
+
+```bash
+npm run build
+npm start
+```
+
+`npm start`（`scripts/start-standalone.mjs`）把 `public`（若存在）與 `.next/static` 複製到 `.next/standalone`，再執行 `node .next/standalone/server.js`，監聽 `0.0.0.0:3000`。
+
+---
+
 ## 技術棧
 
-- **核心框架**：[Next.js 14](https://nextjs.org/) (App Router, Server Components & Route Handlers)
+版本以 `package.json` 為準。目前主要版本是：
+
+- **核心框架**：[Next.js 15.5](https://nextjs.org/) (App Router, Server Components & Route Handlers) 與 [React 18.3](https://react.dev/)
 - **程式語言**：[TypeScript 5.x](https://www.typescriptlang.org/)
-- **資料庫與 ORM**：[PostgreSQL](https://www.postgresql.org/) + [Prisma ORM 5.x](https://www.prisma.io/)
-- **試算表引擎**：[ExcelJS](https://github.com/exceljs/exceljs)
-- **資料驗證**：[Zod](https://zod.dev/)
-- **測試框架**：[Vitest](https://vitest.dev/)
+- **資料庫與 ORM**：[PostgreSQL 15](https://www.postgresql.org/) + [Prisma ORM 5.x](https://www.prisma.io/)
+- **試算表引擎**：[ExcelJS 4.4](https://github.com/exceljs/exceljs)
+- **資料驗證**：[Zod 4.x](https://zod.dev/)
+- **測試框架**：[Vitest 5.x](https://vitest.dev/) 與 [Playwright](https://playwright.dev/)
 - **容器化**：[Docker](https://www.docker.com/) & Docker Compose
-- **持續整合**：[GitHub Actions](https://github.com/features/actions)
+- **持續整合**：[GitHub Actions](https://github.com/features/actions)（`.github/workflows/ci.yml`：Node 20、Postgres 15、lint、typecheck、Vitest、build、Playwright）
 
 ---
 

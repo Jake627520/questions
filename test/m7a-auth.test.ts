@@ -6,6 +6,7 @@ import {
   createSession,
   validateSession,
   destroySession,
+  hashSessionToken,
   SESSION_COOKIE_NAME,
 } from "../src/lib/auth";
 import { POST as loginPOST } from "../src/app/api/auth/login/route";
@@ -122,37 +123,42 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
   // 2. Session Lifecycle & Expiration
   // =========================================================================
   describe("2. Session Management (256-bit random token, validation, expiration & destruction)", () => {
-    it("createSession 應建立 256-bit 高熵 Token 並成功持久化至 PostgreSQL", async () => {
+    it("createSession 應建立 256-bit 高熵 Token，資料庫只存 SHA-256", async () => {
       const { session, token } = await createSession(testUserId, 7);
 
       expect(token).toMatch(/^[a-f0-9]{64}$/); // 32 bytes hex = 64 chars (256 bits)
       expect(session.userId).toBe(testUserId);
       expect(session.expiresAt.getTime()).toBeGreaterThan(Date.now());
+      expect(session.tokenHash).toBe(hashSessionToken(token));
+      expect(session.tokenHash).not.toBe(token);
 
-      const dbSession = await db.session.findUnique({ where: { token } });
+      const dbSession = await db.session.findUnique({ where: { tokenHash: hashSessionToken(token) } });
       expect(dbSession).not.toBeNull();
+      expect(dbSession?.tokenHash).toBe(hashSessionToken(token));
+      expect(JSON.stringify(dbSession)).not.toContain(token);
     });
 
-    it("validateSession 有效 Token 應回傳完整 AuthContext", async () => {
+    it("validateSession 有效 Token 應回傳完整 AuthContext，且不回傳明文 token", async () => {
       const { token } = await createSession(testUserId, 7);
       const auth = await validateSession(token);
 
       expect(auth).not.toBeNull();
       expect(auth?.user.id).toBe(testUserId);
       expect(auth?.user.email).toBe(testEmail);
-      expect(auth?.session.token).toBe(token);
+      expect(auth?.session.tokenHash).toBe(hashSessionToken(token));
+      expect(auth?.session).not.toHaveProperty("token");
     });
 
     it("validateSession 遇到不存在或過期 Token 應回傳 null，並自動清除過期 Session", async () => {
       // 1. 不存在 Token
       expect(await validateSession("non_existent_token")).toBeNull();
 
-      // 2. 建立已過期 Session (expiresAt 在過去)
+      // 2. 建立已過期 Session (expiresAt 在過去)。資料庫存雜湊，Cookie 仍是明文。
       const expiredToken = "expired_token_1234567890abcdef1234567890abcdef1234567890abcdef";
       await db.session.create({
         data: {
           userId: testUserId,
-          token: expiredToken,
+          tokenHash: hashSessionToken(expiredToken),
           expiresAt: new Date(Date.now() - 1000 * 60), // 1 分鐘前過期
         },
       });
@@ -161,7 +167,9 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
       expect(auth).toBeNull();
 
       // 驗證過期 Session 是否已被清除
-      const dbRecord = await db.session.findUnique({ where: { token: expiredToken } });
+      const dbRecord = await db.session.findUnique({
+        where: { tokenHash: hashSessionToken(expiredToken) },
+      });
       expect(dbRecord).toBeNull();
     });
 
@@ -248,8 +256,8 @@ describe("Phase M7-A: Authentication & Session 驗證測試", () => {
       const res = await logoutPOST(req);
       expect(res.status).toBe(200);
 
-      // 驗證 DB session 已不存在
-      const dbSession = await db.session.findUnique({ where: { token } });
+      // 驗證 DB session 已不存在（以雜湊查，明文不在庫內）
+      const dbSession = await db.session.findUnique({ where: { tokenHash: hashSessionToken(token) } });
       expect(dbSession).toBeNull();
     });
   });
